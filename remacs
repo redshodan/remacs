@@ -29,8 +29,9 @@ from optparse import OptionParser
 #  - least significant 3 bites are command.
 #  - middle 4 bits are size of data.
 #  - most significant bit indicates size is number of size bytes.
+CMD_NONE = -1
 CMD_DATA = 0
-CMD_WINCH = 1
+CMD_TTY = 1
 CMD_MAX = 7
 CMD_CMDS = 1 | 2 | 4
 CMD_SIZE_MAX = 15
@@ -94,19 +95,107 @@ def log(*args):
         log_file.write("\n")
         log_file.flush()
 
+class PipeBuff(object):
+    def __init__(self, decoder, cb):
+        self.decoder = decoder
+        self.cb = cb
+        self.reset()
+
+    def reset(self):
+        self.data = None
+        self.output = None
+        self.length = 0
+        self.cmd = CMD_NONE
+        self.need_more = True
+
+    def toStr(self):
+        return "cmd=%d len=%s data='%s' output='%s'" % \
+               (self.cmd, str(len(self.data)), self.data, self.output)
+
+    def filterData(self):
+        if self.decoder:
+            self.decodeCmd()
+        else:
+            self.encodeCmd(CMD_DATA, self.data)
+            log("encoded buff: %s" % self.output)
+
+    def encodeCmd(self, cmd, data):
+        if data:
+            length = len(data)
+            log("length=%d" % length)
+            if length <= CMD_SIZE_MAX + 1:
+                cmd = cmd + (length << 3)
+                output = struct.pack("B", cmd) + data
+            else:
+                cmd = cmd + CMD_SIZE_MAXED
+                log("e-nnl: %d" % length)
+                log("e-nl: %d" % socket.htonl(length))
+                output = (struct.pack("B", cmd) +
+                          struct.pack("I", socket.htonl(length)) + data)
+        else:
+            output = struct.pack("B", cmd)
+        if self.output:
+            self.output = self.output + output
+        else:
+            self.output = output
+
+    def decodeCmd(self):
+        if not self.need_more or self.cmd == CMD_NONE:
+            self.cmd = struct.unpack("B", self.data[0])[0]
+            log("unpacked cmd: %d" % self.cmd)
+            if self.cmd & CMD_SIZE_MAXED:
+                for c in self.data[1:5]:
+                    log("c %s" % c)
+                self.length = struct.unpack("I", self.data[1:5])[0]
+                log("d-nl: %d" % self.length)
+                self.length = socket.ntohl(self.length)
+                log("d-nnl: %d" % self.length)
+                log("d-maxed len: %d" % self.length)
+                self.data = self.data[5:]
+            else:
+                self.length = self.cmd >> 3
+                self.data = self.data[1:]
+            self.cmd = self.cmd & CMD_CMDS
+        ret = False
+        if len(self.data) < self.length:
+            self.need_more = True
+            cmd_data = None
+        elif len(self.data) == self.length:
+            self.output = self.data
+            cmd_data = self.data
+            self.data = None
+        else:
+            if self.output:
+                self.output = self.output + self.data[:self.length]
+            else:
+                self.output = self.data[:self.length]
+            cmd_data = self.data[:self.length]
+            self.data = self.data[self.length:]
+            ret = True
+        log("decoded length: %d need_more=%s cmd: %d" %
+            (self.length, self.need_more, self.cmd))
+        log("decoded data: %s" % self.data)
+        log("decoded output: %s" % self.output)
+        log("decoded cmd_data: %s" % cmd_data)
+        if self.cmd != CMD_DATA:
+            self.output = self.cb(self.cmd, cmd_data)
+        if ret:
+            self.cmd = CMD_NONE
+            return self.decodeCmd()
+        else:
+            return ret
+
 class Pipe(object):
     def __init__(self, ins, outs, ifd_is_sock, cb):
         self.ifd = None
         self.ofd = None
         self.ins = ins
         self.outs = outs
-        self.buff = None
+        self.buff = PipeBuff(ifd_is_sock, cb)
         self.reader = None
-        self.ifd_is_sock = ifd_is_sock
-        self.cb = cb
 
     def reset(self):
-        self.buff = None
+        self.buff.reset()
 
     def setPipes(self, ifd, ofd, iraw, oraw):
         self.ifd = ifd
@@ -114,15 +203,20 @@ class Pipe(object):
         self.iraw = iraw
         self.oraw = oraw
 
+    def sendCmd(self, cmd, data):
+        self.buff.encodeCmd(cmd, data)
+        self.buff.need_more = False
+        insList(self.ofd, self.outs)
+        delList(self.ifd, self.ins)
+
     def run(self):
-        if not self.buff:
+        if self.buff.need_more:
             try:
                 if self.iraw:
-                    self.buff = os.read(self.ifd.fileno(), 1024)
+                    self.buff.data = os.read(self.ifd.fileno(), 1024)
                 else:
-                    self.buff = self.ifd.read(1024)
-                log("read(%s):%s : %s" % (str(self.ifd.fileno()),
-                                          str(len(self.buff)), self.buff))
+                    self.buff.data = self.ifd.read(1024)
+                log("read(%s): %s" % (str(self.ifd.fileno()), self.buff.toStr()))
                 if not is_server:
                     if self.buff == r"[>1;1704;0c":
                         self.buff = None
@@ -132,23 +226,26 @@ class Pipe(object):
                 if e.errno == errno.EIO:
                     log("read(%s): EXC: %s" % (str(self.ifd.fileno()), "EIO"))
                     delList(self.ifd, self.ins)
-                    self.buff = None
+                    self.buff.reset()
                     return
-                elif e.errno != errno.EAGAIN:
-                    log("read(%s): EXC: %s" % (str(self.ifd.fileno()), "eagain"))
-                    raise
-        if not self.buff or not len(self.buff):
-            raise Exception("Connection lost")
-        if self.buff:
-            log("READ(%s): '%s'" % (self.ifd, self.buff))
-            self.buff = self.filterData(self.buff)
-        if self.buff:
-            try:
-                log("write(%s) %s" % (str(self.ifd.fileno()), self.buff))
-                if self.oraw:
-                    size = os.write(self.ofd.fileno(), self.buff)
+                elif e.errno == errno.EAGAIN:
+                    return
                 else:
-                    size = self.ofd.write(self.buff)
+                    log("read(%s): EXC: %s:%d" %
+                        (str(self.ifd.fileno()), e.errno))
+                    raise
+        if ((not self.buff.output) and
+            ((not self.buff.data) or (not len(self.buff.data)))):
+            raise Exception("Connection lost")
+        if self.buff.data:
+            self.buff.filterData()
+        if self.buff.output:
+            try:
+                log("write(%s) %s" % (str(self.ifd.fileno()), self.buff.output))
+                if self.oraw:
+                    size = os.write(self.ofd.fileno(), self.buff.output)
+                else:
+                    size = self.ofd.write(self.buff.output)
                 log("write(%s) size %s" % (str(self.ifd.fileno()), str(size)))
                 # if size is not None and size > 0:
                 #     self.ofd.flush()
@@ -159,63 +256,20 @@ class Pipe(object):
                     insList(self.ofd, self.outs)
                     delList(self.ifd, self.ins)
                     return
-            if size is not None and size != len(self.buff):
+            if size is not None and size != len(self.buff.output):
                 insList(self.ofd, self.outs)
                 delList(self.ifd, self.ins)
-                self.buff = self.buff[size:]
-                log("write(%s): %s 5partial %s" % (str(self.ifd.fileno()),
-                                                   str(size), self.buff))
+                self.buff.output = self.buff.output[size:]
+                log("write(%s): %s partial %s" % (str(self.ifd.fileno()),
+                                                  str(size), self.buff.output))
                 return
-        else:
-            insList(self.ifd, self.ins)
-            delList(self.ofd, self.outs)
-        self.buff = None
-
-    def filterData(self, buff):
-        if self.ifd_is_sock:
-            (cmd, data) = self.decodeCmd(buff)
-            if cmd == CMD_DATA:
-                return data
-            else:
-                return self.cb(cmd, data)
-        else:
-            buff = self.encodeCmd(CMD_DATA, buff)
-            log("encoded buff: %s" % buff)
-            return buff
-
-    def encodeCmd(self, cmd, data):
-        length = len(data)
-        if length <= CMD_SIZE_MAX + 1:
-            cmd = cmd + length << 3
-            return struct.pack("B", cmd) + data
-        else:
-            cmd = cmd + CMD_SIZE_MAXED
-            log("nnl: %d" % length)
-            log("nl: %d" % socket.htonl(length))
-            return struct.pack("B", cmd) + \
-                   struct.pack("I", socket.htonl(length)) + data
-
-    def decodeCmd(self, data):
-        cmd = struct.unpack("B", data[0])[0]
-        if cmd & CMD_SIZE_MAXED:
-            for c in data[1:5]:
-                log("c %s" % c)
-            length = struct.unpack("I", data[1:5])[0]
-            log("nl: %d" % length)
-            length = socket.ntohl(length)
-            log("nnl: %d" % length)
-            log("maxed len: %d" % length)
-            data = data[5:]
-        else:
-            length = cmd >> 3
-            data = data[1:]
-        cmd = cmd & CMD_CMDS
-        log("decoded cmd: %d" % cmd)
-        log("decoded data: %s" % data)
-        return cmd, data
+        
+        insList(self.ifd, self.ins)
+        delList(self.ofd, self.outs)
+        self.buff.reset()
 
 class TTYManager(threading.Thread):
-    def __init__(self, id, sock, tty, mgr = None):
+    def __init__(self, id, sock, tty, cmdCB, mgr = None):
         threading.Thread.__init__(self)
         self.id = id
         self.sock = sock
@@ -223,9 +277,11 @@ class TTYManager(threading.Thread):
         self.mgr = mgr
         self.ins = []
         self.outs = []
+        self.cmdCB = cmdCB
         self.inpipe = Pipe(self.ins, self.outs, True, self.cmdCB)
         self.outpipe = Pipe(self.ins, self.outs, False, self.cmdCB)
         self.setDaemon(True)
+        self.setup()
 
     def close(self):
         try:
@@ -239,7 +295,7 @@ class TTYManager(threading.Thread):
         if self.mgr:
             self.mgr.delManager(self)
 
-    def setupTty(self):
+    def setup(self):
         new = termios.tcgetattr(self.tty.fileno())
         new[0] = new[0] | termios.IGNPAR
         new[0] = new[0] & ~(termios.ISTRIP|termios.INLCR|termios.IGNCR|
@@ -251,14 +307,17 @@ class TTYManager(threading.Thread):
         new[1] = new[1] & ~termios.OPOST
         termios.tcsetattr(self.tty.fileno(), termios.TCSANOW, new)
 
-    def run(self):
+        log("fds: sock=%d tty=%s" % (self.sock.fileno(), self.tty.fileno()))
+        
         fcntl.fcntl(self.tty.fileno(), fcntl.F_SETFL, os.O_NONBLOCK)
         fcntl.fcntl(self.tty.fileno(), fcntl.F_SETFL, os.O_NONBLOCK)
 
+        self.ins.extend([self.sock, self.tty])
+        self.inpipe.setPipes(self.sock, self.tty, False, True)
+        self.outpipe.setPipes(self.tty, self.sock, True, False)
+
+    def run(self):
         try:
-            self.ins.extend([self.sock, self.tty])
-            self.inpipe.setPipes(self.sock, self.tty, False, True)
-            self.outpipe.setPipes(self.tty, self.sock, True, False)
             while len(self.ins) or len(self.outs):
                 if ((len(self.ins) == 1) and (self.ins[0] == self.sock) and
                     not len(self.outs)):
@@ -282,8 +341,8 @@ class TTYManager(threading.Thread):
             import traceback
             traceback.print_exc()
 
-    def cmdCB(self, cmd, data):
-        log("CMD: %s DATA: %s" % (cmd, data))
+    def sendCmd(self, cmd, data):
+        self.outpipe.sendCmd(cmd, data)
 
 class Server(object):
     def __init__(self, host, port):
@@ -315,14 +374,14 @@ class Server(object):
                     conn = self.sslify(conn, addr)
                     if not conn:
                         continue
-                    (tty, slave) = pty.openpty()
-                    tty = os.fdopen(tty, "w+")
-                    fcntl.ioctl(tty, termios.TIOCSWINSZ,
+                    (self.tty, slave) = pty.openpty()
+                    self.tty = os.fdopen(self.tty, "w+")
+                    fcntl.ioctl(self.tty, termios.TIOCSWINSZ,
                                 struct.pack("HHHH", 24, 80, 0, 0))
                     #os.close(slave)
-                    mgr = TTYManager(len(self.ttys), conn, tty, self)
+                    mgr = TTYManager(len(self.ttys), conn, self.tty,
+                                     self.cmdCB, self)
                     self.addManager(mgr)
-                    mgr.setupTty()
                     sendToEmacs("tty", os.ttyname(slave), "xterm")
                     sendFinish()
                     mgr.start()
@@ -365,6 +424,18 @@ class Server(object):
                 conn.close()
                 return None
 
+    def cmdCB(self, cmd, data):
+        log("SERVER CMD: %s DATA: %s" % (cmd, data))
+        if cmd == CMD_TTY:
+            words = {}
+            for word in data.split(";"):
+                key, val = word.split("=")
+                words[key] = val
+            buff = struct.pack("HHHH", int(words["row"]), int(words["col"]),
+                               0, 0)
+            log("Setting winsize: %s %s" % (words["row"], words["col"]))
+            fcntl.ioctl(self.tty, termios.TIOCSWINSZ, buff)
+
 class Client(object):
     def __init__(self, host, port):
         self.addr = (host, port)
@@ -380,8 +451,8 @@ class Client(object):
 
             signal.signal(signal.SIGWINCH, self.sigWINCH)
 
-            self.mgr = TTYManager(0, self.sock, self.tty)
-            self.mgr.setupTty()
+            self.mgr = TTYManager(0, self.sock, self.tty, self.cmdCB)
+            self.sigWINCH(0, None)
             self.mgr.run()
         except Exception, e:
             termios.tcsetattr(self.tty, termios.TCSANOW, self.orig_tty)
@@ -396,10 +467,10 @@ class Client(object):
         try:
             buff = 'abcdefgh'
             buff = fcntl.ioctl(self.tty, termios.TIOCGWINSZ, buff)
-            (row, col, x, y) = struct.unpack("hhhh", buff)
-            self.sendRowCol(row, col)
+            (row, col, x, y) = struct.unpack("HHHH", buff)
+            self.mgr.sendCmd(CMD_TTY, "row=%d;col=%d" % (row, col))
         except Exception, e:
-            print "sigWINCH"
+            log("sigWINCH: %s" % str(e))
             import traceback
             traceback.print_exc()
             print e
@@ -421,6 +492,9 @@ class Client(object):
                 print "SSL failed for '%s': %s" % (str(self.addr), str(e))
                 self.sock.close()
                 return None
+
+    def cmdCB(self, cmd, data):
+        log("CLIENT CMD: %s DATA: %s" % (cmd, data))
 
 if __name__ == "__main__":
     if "--server" in sys.argv:
