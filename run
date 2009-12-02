@@ -1,0 +1,4 @@
+#!/bin/sh
+
+rm log-* -f
+PATH=.:$PATH emacs -q remacs.el --eval '(eval-buffer (get-buffer "remacs.el"))'
