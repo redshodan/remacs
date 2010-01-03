@@ -22,7 +22,7 @@
 #
 
 import os, sys, select, pty, termios, socket, threading, struct, fcntl
-import errno, signal
+import errno, signal, re, ssl
 from optparse import OptionParser
 
 # Command byte:
@@ -89,15 +89,15 @@ def log(*args):
     #     #print args
     #     sendToEmacs("msg", *args)
     # else:
-    if True:
-        for arg in args:
-            log_file.write("%s " % str(arg))
-        log_file.write("\n")
-        log_file.flush()
+    for arg in args:
+        log_file.write("%s " % str(arg))
+    log_file.write("\n")
+    log_file.flush()
 
 class PipeBuff(object):
-    def __init__(self, decoder, cb):
+    def __init__(self, decoder, cb, do_encode):
         self.decoder = decoder
+        self.do_encode = do_encode
         self.cb = cb
         self.reset()
 
@@ -106,18 +106,30 @@ class PipeBuff(object):
         self.output = None
         self.length = 0
         self.cmd = CMD_NONE
-        self.need_more = True
 
     def toStr(self):
+        if self.data:
+            data = self.data
+        else:
+            data = ""
         return "cmd=%d len=%s data='%s' output='%s'" % \
-               (self.cmd, str(len(self.data)), self.data, self.output)
+               (self.cmd, str(len(data)), self.data, self.output)
 
     def filterData(self):
         if self.decoder:
             self.decodeCmd()
         else:
-            self.encodeCmd(CMD_DATA, self.data)
-            log("encoded buff: %s" % self.output)
+            if self.do_encode:
+                self.encodeCmd(CMD_DATA, self.data)
+                log("encoded buff: %s" % self.output)
+            else:
+                log("output buff: %s" % self.output)
+                if self.output:
+                    self.output = self.output + data
+                else:
+                    self.output = self.data
+                self.data = None
+                log("output buff: %s" % self.output)
 
     def encodeCmd(self, cmd, data):
         if data:
@@ -140,30 +152,29 @@ class PipeBuff(object):
             self.output = output
 
     def decodeCmd(self):
-        if not self.need_more or self.cmd == CMD_NONE:
+        if self.cmd == CMD_NONE:
             self.cmd = struct.unpack("B", self.data[0])[0]
             log("unpacked cmd: %d" % self.cmd)
             if self.cmd & CMD_SIZE_MAXED:
-                for c in self.data[1:5]:
-                    log("c %s" % c)
                 self.length = struct.unpack("I", self.data[1:5])[0]
-                log("d-nl: %d" % self.length)
                 self.length = socket.ntohl(self.length)
-                log("d-nnl: %d" % self.length)
-                log("d-maxed len: %d" % self.length)
                 self.data = self.data[5:]
             else:
                 self.length = self.cmd >> 3
                 self.data = self.data[1:]
             self.cmd = self.cmd & CMD_CMDS
+        cmd = self.cmd
         ret = False
         if len(self.data) < self.length:
-            self.need_more = True
             cmd_data = None
         elif len(self.data) == self.length:
-            self.output = self.data
+            if self.output:
+                self.output = self.output + self.data
+            else:
+                self.output = self.data
             cmd_data = self.data
             self.data = None
+            self.cmd = CMD_NONE
         else:
             if self.output:
                 self.output = self.output + self.data[:self.length]
@@ -171,27 +182,28 @@ class PipeBuff(object):
                 self.output = self.data[:self.length]
             cmd_data = self.data[:self.length]
             self.data = self.data[self.length:]
+            self.cmd = CMD_NONE
             ret = True
-        log("decoded length: %d need_more=%s cmd: %d" %
-            (self.length, self.need_more, self.cmd))
+        log("decoded length: %d self.cmd: %d cmd: %d" %
+            (self.length, self.cmd, cmd))
         log("decoded data: %s" % self.data)
         log("decoded output: %s" % self.output)
         log("decoded cmd_data: %s" % cmd_data)
-        if self.cmd != CMD_DATA:
-            self.output = self.cb(self.cmd, cmd_data)
+        if cmd_data and self.cmd != CMD_DATA:
+            self.output = self.cb(cmd, cmd_data)
         if ret:
-            self.cmd = CMD_NONE
+            log("Recursing decodeCmd")
             return self.decodeCmd()
         else:
             return ret
 
 class Pipe(object):
-    def __init__(self, ins, outs, ifd_is_sock, cb):
+    def __init__(self, ins, outs, ifd_is_sock, cb, do_encode):
         self.ifd = None
         self.ofd = None
         self.ins = ins
         self.outs = outs
-        self.buff = PipeBuff(ifd_is_sock, cb)
+        self.buff = PipeBuff(ifd_is_sock, cb, do_encode)
         self.reader = None
 
     def reset(self):
@@ -205,37 +217,60 @@ class Pipe(object):
 
     def sendCmd(self, cmd, data):
         self.buff.encodeCmd(cmd, data)
-        self.buff.need_more = False
         insList(self.ofd, self.outs)
         delList(self.ifd, self.ins)
 
-    def run(self):
-        if self.buff.need_more:
+    def run(self, do_read):
+        while self._run(do_read):
+            pass
+        
+    def _run(self, do_read):
+        log("Pipe.run(%s)" % str(do_read))
+        if do_read:
             try:
+                log("starting read(%s)" % str(self.ifd))
                 if self.iraw:
-                    self.buff.data = os.read(self.ifd.fileno(), 1024)
+                    data = os.read(self.ifd.fileno(), 1024)
                 else:
-                    self.buff.data = self.ifd.read(1024)
-                log("read(%s): %s" % (str(self.ifd.fileno()), self.buff.toStr()))
-                if not is_server:
-                    if self.buff == r"[>1;1704;0c":
-                        self.buff = None
-                        return
+                    data = self.ifd.read(1024)
+                if self.buff.data:
+                    self.buff.data = self.buff.data + data
+                else:
+                    self.buff.data = data
+                log("read(%s): %d %s" % (str(self.ifd.fileno()), len(data),
+                                         data))
             except OSError, e:
                 log("read(%s): EXC: %s" % (str(self.ifd.fileno()), str(e)))
                 if e.errno == errno.EIO:
                     log("read(%s): EXC: %s" % (str(self.ifd.fileno()), "EIO"))
                     delList(self.ifd, self.ins)
                     self.buff.reset()
-                    return
+                    return False
                 elif e.errno == errno.EAGAIN:
-                    return
+                    log("EAGAIN")
+                    if not self.buff.output:
+                        return False
                 else:
                     log("read(%s): EXC: %s:%d" %
                         (str(self.ifd.fileno()), e.errno))
                     raise
-        if ((not self.buff.output) and
-            ((not self.buff.data) or (not len(self.buff.data)))):
+            except ssl.SSLError, e:
+                if e.errno == 2:
+                    # want read
+                    log("in read: ssl want read")
+                    insList(self.ifd, self.ins)
+                    delList(self.ofd, self.outs)
+                    return False
+                elif e.errno == 3:
+                    # want write
+                    log("in read: ssl want write")
+                    delList(self.ifd, self.ins)
+                    insList(self.ofd, self.outs)
+                    if not self.buff.output:
+                        return False
+                else:
+                    raise
+        if (do_read and ((not self.buff.data) or (not len(self.buff.data)))):
             raise Exception("Connection lost")
         if self.buff.data:
             self.buff.filterData()
@@ -245,28 +280,49 @@ class Pipe(object):
                 if self.oraw:
                     size = os.write(self.ofd.fileno(), self.buff.output)
                 else:
-                    size = self.ofd.write(self.buff.output)
+                   size = self.ofd.write(self.buff.output)
                 log("write(%s) size %s" % (str(self.ifd.fileno()), str(size)))
-                # if size is not None and size > 0:
-                #     self.ofd.flush()
             except OSError, e:
                 log("write(%s): EXC %s" % (str(self.ifd.fileno()), str(e)))
                 if e.errno == errno.EAGAIN:
                     log("write(%s): EXC %s" % (str(self.ifd.fileno()), "EAGAIN"))
                     insList(self.ofd, self.outs)
                     delList(self.ifd, self.ins)
-                    return
+                    return False
+            except ssl.SSLError, e:
+                if e.errno == 2:
+                    # want read
+                    log("in write: ssl want read")
+                    insList(self.ifd, self.ins)
+                    delList(self.ofd, self.outs)
+                    return False
+                elif e.errno == 3:
+                    # want write
+                    log("in write: ssl want write")
+                    delList(self.ifd, self.ins)
+                    insList(self.ofd, self.outs)
+                    return False
+                else:
+                    raise
             if size is not None and size != len(self.buff.output):
                 insList(self.ofd, self.outs)
                 delList(self.ifd, self.ins)
                 self.buff.output = self.buff.output[size:]
                 log("write(%s): %s partial %s" % (str(self.ifd.fileno()),
                                                   str(size), self.buff.output))
-                return
-        
-        insList(self.ifd, self.ins)
-        delList(self.ofd, self.outs)
-        self.buff.reset()
+                return False
+            elif size is None:
+                raise Exception("Connection lost on write")
+            else:
+                log("write(%s): reset" % str(self.ifd.fileno()))
+                self.buff.reset()
+                insList(self.ifd, self.ins)
+                delList(self.ofd, self.outs)
+
+        if do_read:
+            return True
+        else:
+            return False
 
 class TTYManager(threading.Thread):
     def __init__(self, id, sock, tty, cmdCB, mgr = None):
@@ -278,8 +334,8 @@ class TTYManager(threading.Thread):
         self.ins = []
         self.outs = []
         self.cmdCB = cmdCB
-        self.inpipe = Pipe(self.ins, self.outs, True, self.cmdCB)
-        self.outpipe = Pipe(self.ins, self.outs, False, self.cmdCB)
+        self.inpipe = Pipe(self.ins, self.outs, True, self.cmdCB, False)
+        self.outpipe = Pipe(self.ins, self.outs, False, self.cmdCB, True)
         self.setDaemon(True)
         self.setup()
 
@@ -310,7 +366,7 @@ class TTYManager(threading.Thread):
         log("fds: sock=%d tty=%s" % (self.sock.fileno(), self.tty.fileno()))
         
         fcntl.fcntl(self.tty.fileno(), fcntl.F_SETFL, os.O_NONBLOCK)
-        fcntl.fcntl(self.tty.fileno(), fcntl.F_SETFL, os.O_NONBLOCK)
+        fcntl.fcntl(self.sock.fileno(), fcntl.F_SETFL, os.O_NONBLOCK)
 
         self.ins.extend([self.sock, self.tty])
         self.inpipe.setPipes(self.sock, self.tty, False, True)
@@ -321,19 +377,28 @@ class TTYManager(threading.Thread):
             while len(self.ins) or len(self.outs):
                 if ((len(self.ins) == 1) and (self.ins[0] == self.sock) and
                     not len(self.outs)):
+                    log("breaking out of TTYManager.run")
                     break
                 try:
                     ret = select.select(self.ins, self.outs, [], 10.0)
                 except select.error, e:
                     if e[0] == 4:
+                        log("select err 4")
                         continue
                 try:
-                    if (self.sock in ret[0]) or (self.tty in ret[1]):
-                        self.inpipe.run()
-                    if (self.tty in ret[0]) or (self.sock in ret[1]):
-                        self.outpipe.run()
+                    log("ins: %s" % str(self.ins))
+                    if self.sock in ret[0]:
+                        self.inpipe.run(True)
+                    if self.tty in ret[1]:
+                        self.inpipe.run(False)
+                    if self.tty in ret[0]:
+                        self.outpipe.run(True)
+                    if self.sock in ret[1]:
+                        self.outpipe.run(False)
                 except Exception, e:
                     log("Socket exception: %s %s" % (type(e), str(e)))
+                    import traceback
+                    log(traceback.format_exc())
                     self.close()
                     return
         except Exception, e:
@@ -350,6 +415,7 @@ class Server(object):
         self.port = port
         self.sock = None
         self.ttys = []
+        self.started_emacs = False
 
     def run(self):
         try:
@@ -371,19 +437,17 @@ class Server(object):
                 if self.sock in ret[0]:
                     conn, addr = self.sock.accept()
                     log("New connection from: %s" % str(addr))
+                    conn.setblocking(0)
                     conn = self.sslify(conn, addr)
                     if not conn:
                         continue
-                    (self.tty, slave) = pty.openpty()
+                    (self.tty, self.slave) = pty.openpty()
                     self.tty = os.fdopen(self.tty, "w+")
                     fcntl.ioctl(self.tty, termios.TIOCSWINSZ,
                                 struct.pack("HHHH", 24, 80, 0, 0))
-                    #os.close(slave)
                     mgr = TTYManager(len(self.ttys), conn, self.tty,
                                      self.cmdCB, self)
                     self.addManager(mgr)
-                    sendToEmacs("tty", os.ttyname(slave), "xterm")
-                    sendFinish()
                     mgr.start()
                 if sys.stdin in ret[0]:
                     buff = sys.stdin.read()
@@ -405,9 +469,12 @@ class Server(object):
     def delManager(self, mgr):
         delList(mgr, self.ttys)
 
+    def startEmacs(self, term):
+        sendToEmacs("tty", os.ttyname(self.slave), term)
+        sendFinish()
+        
     def sslify(self, conn, addr):
         try:
-            import ssl
             try:
                 return ssl.wrap_socket(
                     conn, ssl_version=ssl.PROTOCOL_TLSv1, server_side=True,
@@ -433,20 +500,31 @@ class Server(object):
                 words[key] = val
             buff = struct.pack("HHHH", int(words["row"]), int(words["col"]),
                                0, 0)
+            log("winsize %d: %s" % (len(buff), buff))
             log("Setting winsize: %s %s" % (words["row"], words["col"]))
             fcntl.ioctl(self.tty, termios.TIOCSWINSZ, buff)
+            if not self.started_emacs:
+                self.startEmacs(words["term"])
+                self.started_emacs = True
+        elif cmd == CMD_DATA:
+            return data
 
 class Client(object):
     def __init__(self, host, port):
         self.addr = (host, port)
         self.sock = None
         self.tty = open(os.ttyname(sys.stdin.fileno()), "w+", 0)
-
+        if "TERM" in os.environ:
+            self.term = os.environ["TERM"]
+        else:
+            self.term = "xterm"
+        
     def run(self):
         self.orig_tty = termios.tcgetattr(self.tty)
         try:
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.sock.connect(self.addr)
+            self.sock.setblocking(0)
             self.sock = self.sslify()
 
             signal.signal(signal.SIGWINCH, self.sigWINCH)
@@ -468,7 +546,13 @@ class Client(object):
             buff = 'abcdefgh'
             buff = fcntl.ioctl(self.tty, termios.TIOCGWINSZ, buff)
             (row, col, x, y) = struct.unpack("HHHH", buff)
-            self.mgr.sendCmd(CMD_TTY, "row=%d;col=%d" % (row, col))
+            log("winsize %d: %s" % (len(buff), buff))
+            if not signum and not frame:
+                cmd = "term=%s;" % self.term
+            else:
+                cmd = ""
+            cmd = "%srow=%d;col=%d" % (cmd, row, col)
+            self.mgr.sendCmd(CMD_TTY, cmd)
         except Exception, e:
             log("sigWINCH: %s" % str(e))
             import traceback
@@ -477,7 +561,6 @@ class Client(object):
 
     def sslify(self):
         try:
-            import ssl
             try:
                 return ssl.wrap_socket(
                     self.sock, ssl_version=ssl.PROTOCOL_TLSv1, server_side=False)
@@ -495,6 +578,10 @@ class Client(object):
 
     def cmdCB(self, cmd, data):
         log("CLIENT CMD: %s DATA: %s" % (cmd, data))
+        if cmd == CMD_DATA:
+            return data
+        else:
+            return None
 
 if __name__ == "__main__":
     if "--server" in sys.argv:
