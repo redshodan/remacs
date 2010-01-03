@@ -1,4 +1,5 @@
 #!/bin/sh
 
 rm log-* -f
-PATH=.:$PATH emacs -q remacs.el --eval '(eval-buffer (get-buffer "remacs.el"))'
+export PATH=.:$PATH
+exec emacs -nw -q remacs.el --eval "(progn (fset 'yes-or-no-p 'y-or-n-p)(eval-buffer (get-buffer \"remacs.el\")))"
