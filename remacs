@@ -18,11 +18,11 @@
 #
 #
 # Author: Chris Newton <redshodan@gmail.com>
-# $Revision$
+# $Revision: a6b5c527f92b $
 #
 
 import os, sys, select, pty, termios, socket, threading, struct, fcntl
-import errno, signal, re, ssl
+import errno, signal, re, ssl, subprocess
 from optparse import OptionParser
 
 # Command byte:
@@ -59,36 +59,7 @@ def delList(val, list):
             del list[index]
             return
 
-def escape(str):
-    ret = []
-    if str[0] == "-":
-        ret.append("&")
-    for c in str:
-        if c == " ":
-            ret.append("&_")
-        elif c == "\n":
-            ret.append("&n")
-        elif c == "&":
-            ret.append("&&")
-        else:
-            ret.append(c)
-    return "".join(ret)
-
-def sendToEmacs(cmd, *args):
-    out = []
-    for arg in args:
-        out.append(escape(arg.strip()))
-    print "-%s %s" % (cmd, " ".join(out)),
-    #sys.stdout.flush()
-
-def sendFinish():
-    print
-
 def log(*args):
-    # if is_server:
-    #     #print args
-    #     sendToEmacs("msg", *args)
-    # else:
     for arg in args:
         log_file.write("%s " % str(arg))
     log_file.write("\n")
@@ -325,34 +296,40 @@ class Pipe(object):
             return False
 
 class TTYManager(threading.Thread):
-    def __init__(self, id, sock, tty, cmdCB, mgr = None):
+    def __init__(self, fdin, fdout, tty, cmd_cb, extra_fds=[],
+                 extra_fds_cb=None):
         threading.Thread.__init__(self)
-        self.id = id
-        self.sock = sock
+        self.fdin = fdin
+        self.fdout = fdout
         self.tty = tty
-        self.mgr = mgr
         self.ins = []
         self.outs = []
-        self.cmdCB = cmdCB
-        self.inpipe = Pipe(self.ins, self.outs, True, self.cmdCB, False)
-        self.outpipe = Pipe(self.ins, self.outs, False, self.cmdCB, True)
+        self.cmd_cb = cmd_cb
+        self.extra_fds = extra_fds
+        self.extra_fds_cb = extra_fds_cb
+        self.inpipe = Pipe(self.ins, self.outs, True, self.cmd_cb, False)
+        self.outpipe = Pipe(self.ins, self.outs, False, self.cmd_cb, True)
         self.setDaemon(True)
         self.setup()
 
     def close(self):
         try:
-            self.sock.close()
+            self.fdin.close()
         except:
-           pass
+            pass
         try:
+            self.fdout.close()
+        except:
+            pass
+        try:
+            termios.tcsetattr(self.tty, termios.TCSANOW, self.orig_tty)
             os.close(self.tty)
         except:
             pass
-        if self.mgr:
-            self.mgr.delManager(self)
 
     def setup(self):
-        new = termios.tcgetattr(self.tty.fileno())
+        self.orig_tty = termios.tcgetattr(self.tty)
+        new = termios.tcgetattr(self.tty)
         new[0] = new[0] | termios.IGNPAR
         new[0] = new[0] & ~(termios.ISTRIP|termios.INLCR|termios.IGNCR|
                             termios.ICRNL|termios.IXON|termios.IXANY|
@@ -363,19 +340,24 @@ class TTYManager(threading.Thread):
         new[1] = new[1] & ~termios.OPOST
         termios.tcsetattr(self.tty.fileno(), termios.TCSANOW, new)
 
-        log("fds: sock=%d tty=%s" % (self.sock.fileno(), self.tty.fileno()))
+        log("fds: fdin=%d fdout=%d tty=%s" %
+            (self.fdin.fileno(), self.fdout.fileno(), self.tty.fileno()))
         
         fcntl.fcntl(self.tty.fileno(), fcntl.F_SETFL, os.O_NONBLOCK)
-        fcntl.fcntl(self.sock.fileno(), fcntl.F_SETFL, os.O_NONBLOCK)
+        fcntl.fcntl(self.fdin.fileno(), fcntl.F_SETFL, os.O_NONBLOCK)
+        fcntl.fcntl(self.fdout.fileno(), fcntl.F_SETFL, os.O_NONBLOCK)
+        for fd in self.extra_fds:
+            fcntl.fcntl(fd.fileno(), fcntl.F_SETFL, os.O_NONBLOCK)
 
-        self.ins.extend([self.sock, self.tty])
-        self.inpipe.setPipes(self.sock, self.tty, False, True)
-        self.outpipe.setPipes(self.tty, self.sock, True, False)
+        self.ins.extend([self.fdin, self.tty])
+        self.ins.extend(self.extra_fds)
+        self.inpipe.setPipes(self.fdin, self.tty, False, True)
+        self.outpipe.setPipes(self.tty, self.fdout, True, False)
 
     def run(self):
         try:
             while len(self.ins) or len(self.outs):
-                if ((len(self.ins) == 1) and (self.ins[0] == self.sock) and
+                if ((len(self.ins) == 1) and (self.ins[0] == self.fdin) and
                     not len(self.outs)):
                     log("breaking out of TTYManager.run")
                     break
@@ -387,16 +369,19 @@ class TTYManager(threading.Thread):
                         continue
                 try:
                     log("ins: %s" % str(self.ins))
-                    if self.sock in ret[0]:
+                    for fd in self.extra_fds:
+                        if fd in ret[0]:
+                            self.extra_fds_cb(fd)
+                    if self.fdin in ret[0]:
                         self.inpipe.run(True)
                     if self.tty in ret[1]:
                         self.inpipe.run(False)
                     if self.tty in ret[0]:
                         self.outpipe.run(True)
-                    if self.sock in ret[1]:
+                    if self.fdout in ret[1]:
                         self.outpipe.run(False)
                 except Exception, e:
-                    log("Socket exception: %s %s" % (type(e), str(e)))
+                    log("I/O exception: %s %s" % (type(e), str(e)))
                     import traceback
                     log(traceback.format_exc())
                     self.close()
@@ -410,88 +395,57 @@ class TTYManager(threading.Thread):
         self.outpipe.sendCmd(cmd, data)
 
 class Server(object):
-    def __init__(self, host, port):
-        self.host = host
-        self.port = port
-        self.sock = None
-        self.ttys = []
+    def __init__(self):
         self.started_emacs = False
-
+        self.pipe = None
+    
     def run(self):
         try:
-            self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.sock.bind((self.host, self.port))
-            self.sock.listen(1)
-            self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER,
-                                 struct.pack("ii", 1, 0))
-
-            ins = [self.sock, sys.stdin]
-            outs = []
-            errs = []
-            while True:
-                try:
-                    ret = select.select(ins, outs, errs)
-                except select.error, e:
-                    if e[0] == 4:
-                        continue
-                if self.sock in ret[0]:
-                    conn, addr = self.sock.accept()
-                    log("New connection from: %s" % str(addr))
-                    conn.setblocking(0)
-                    conn = self.sslify(conn, addr)
-                    if not conn:
-                        continue
-                    (self.tty, self.slave) = pty.openpty()
-                    self.tty = os.fdopen(self.tty, "w+")
-                    fcntl.ioctl(self.tty, termios.TIOCSWINSZ,
-                                struct.pack("HHHH", 24, 80, 0, 0))
-                    mgr = TTYManager(len(self.ttys), conn, self.tty,
-                                     self.cmdCB, self)
-                    self.addManager(mgr)
-                    mgr.start()
-                if sys.stdin in ret[0]:
-                    buff = sys.stdin.read()
-                    log("from emacs: %s" % buff)
+            self.pipe = open("/tmp/remacs%d/server" % os.geteuid(), "r+")
+            (self.tty, self.slave) = pty.openpty()
+            self.tty = os.fdopen(self.tty, "w+")
+            fcntl.ioctl(self.tty, termios.TIOCSWINSZ,
+                        struct.pack("HHHH", 24, 80, 0, 0))
+            self.mgr = TTYManager(sys.stdin, sys.stdout, self.tty, self.cmd_cb,
+                                  [self.pipe], self.pipe_cb)
+            self.mgr.run()
         except Exception, e:
-            log("Main loop exception: %s %s" % (type(e), str(e)))
+            print "Main loop exception: %s %s" % (type(e), str(e))
             import traceback
             traceback.print_exc()
-            try:
-                self.sock.close()
-            except:
-                pass
-            for tty in self.ttys:
-                tty.close()
-
-    def addManager(self, mgr):
-        self.ttys.append(mgr)
-
-    def delManager(self, mgr):
-        delList(mgr, self.ttys)
+        finally:
+            self.mgr.close()
 
     def startEmacs(self, term):
         sendToEmacs("tty", os.ttyname(self.slave), term)
         sendFinish()
-        
-    def sslify(self, conn, addr):
-        try:
-            try:
-                return ssl.wrap_socket(
-                    conn, ssl_version=ssl.PROTOCOL_TLSv1, server_side=True,
-                    keyfile="cert.pem", certfile="cert.pem")
-            except Exception, e:
-                log("SSL failed for '%s': %s" % (str(addr), str(e)))
-                conn.close()
-                return None
-        except:
-            try:
-                return socket.ssl(conn)
-            except Exception, e:
-                log("SSL failed for '%s': %s" % (str(addr), str(e)))
-                conn.close()
-                return None
 
-    def cmdCB(self, cmd, data):
+    def escape(str):
+        ret = []
+        if str[0] == "-":
+            ret.append("&")
+        for c in str:
+            if c == " ":
+                ret.append("&_")
+            elif c == "\n":
+                ret.append("&n")
+            elif c == "&":
+                ret.append("&&")
+            else:
+                ret.append(c)
+        return "".join(ret)
+
+    def sendToEmacs(cmd, *args):
+        out = []
+        for arg in args:
+            out.append(escape(arg.strip()))
+        self.pipe.write("-%s %s" % (cmd, " ".join(out)))
+
+    def pipe_cb(self, fd):
+        buff = self.pipe.read()
+        log("Got from emacs: " + buff)
+        
+    def cmd_cb(self, cmd, data):
         log("SERVER CMD: %s DATA: %s" % (cmd, data))
         if cmd == CMD_TTY:
             words = {}
@@ -503,16 +457,17 @@ class Server(object):
             log("winsize %d: %s" % (len(buff), buff))
             log("Setting winsize: %s %s" % (words["row"], words["col"]))
             fcntl.ioctl(self.tty, termios.TIOCSWINSZ, buff)
-            if not self.started_emacs:
+            if not self.started:
                 self.startEmacs(words["term"])
-                self.started_emacs = True
+                self.started = True
         elif cmd == CMD_DATA:
             return data
 
 class Client(object):
-    def __init__(self, host, port):
-        self.addr = (host, port)
-        self.sock = None
+    def __init__(self, host, transport):
+        self.host = host
+        self.transport = transport
+        self.cmd = self.transport + " -T " + self.host + " remacs --server"
         self.tty = open(os.ttyname(sys.stdin.fileno()), "w+", 0)
         if "TERM" in os.environ:
             self.term = os.environ["TERM"]
@@ -520,26 +475,24 @@ class Client(object):
             self.term = "xterm"
         
     def run(self):
-        self.orig_tty = termios.tcgetattr(self.tty)
         try:
-            self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.sock.connect(self.addr)
-            self.sock.setblocking(0)
-            self.sock = self.sslify()
+            print "cmd:", self.cmd
+            self.pipe = subprocess.Popen(self.cmd, stdin=subprocess.PIPE,
+                                         stdout=subprocess.PIPE,
+                                         stderr=subprocess.PIPE, shell=True)
 
             signal.signal(signal.SIGWINCH, self.sigWINCH)
 
-            self.mgr = TTYManager(0, self.sock, self.tty, self.cmdCB)
+            self.mgr = TTYManager(self.pipe.stdin, self.pipe.stdout,
+                                  self.tty, self.cmd_cb)
             self.sigWINCH(0, None)
             self.mgr.run()
         except Exception, e:
-            termios.tcsetattr(self.tty, termios.TCSANOW, self.orig_tty)
             print "Main loop exception: %s %s" % (type(e), str(e))
             import traceback
             traceback.print_exc()
-            self.mgr.close()
         finally:
-            termios.tcsetattr(self.tty, termios.TCSANOW, self.orig_tty)
+            self.mgr.close()
 
     def sigWINCH(self, signum, frame):
         try:
@@ -559,24 +512,7 @@ class Client(object):
             traceback.print_exc()
             print e
 
-    def sslify(self):
-        try:
-            try:
-                return ssl.wrap_socket(
-                    self.sock, ssl_version=ssl.PROTOCOL_TLSv1, server_side=False)
-            except Exception, e:
-                print "SSL failed for '%s': %s" % (str(self.addr), str(e))
-                self.sock.close()
-                return None
-        except:
-            try:
-                return socket.ssl(self.sock)
-            except Exception, e:
-                print "SSL failed for '%s': %s" % (str(self.addr), str(e))
-                self.sock.close()
-                return None
-
-    def cmdCB(self, cmd, data):
+    def cmd_cb(self, cmd, data):
         log("CLIENT CMD: %s DATA: %s" % (cmd, data))
         if cmd == CMD_DATA:
             return data
@@ -584,12 +520,21 @@ class Client(object):
             return None
 
 if __name__ == "__main__":
-    if "--server" in sys.argv:
+    parser = OptionParser()
+    parser.add_option("-s", "--server", action="store_true", dest="server",
+                      default=False, help="Run in server mode")
+    parser.add_option("-t", "--transport", dest="transport", default="ssh",
+                      help="Transport program. ie: ssh")
+    (options, args) = parser.parse_args()
+
+    if options.server:
         initLog("server")
         is_server = True
-        server = Server("0.0.0.0", 4334)
+        server = Server()
         server.run()
+    elif len(args) != 1:
+        parser.print_help()
     else:
         initLog("client")
-        client = Client("localhost", 4334)
+        client = Client(args[0], options.transport)
         client.run()

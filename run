@@ -2,4 +2,4 @@
 
 rm log-* -f
 export PATH=.:$PATH
-exec emacs -nw -q remacs.el --eval "(progn (fset 'yes-or-no-p 'y-or-n-p)(eval-buffer (get-buffer \"remacs.el\")))"
+exec strace -o strace.log emacs -nw -q remacs.el --eval "(progn (fset 'yes-or-no-p 'y-or-n-p)(eval-buffer (get-buffer \"remacs.el\")))"
