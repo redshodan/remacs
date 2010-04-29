@@ -28,6 +28,7 @@
 (require 'cl)
 (require 'server)
 
+(defvar remacs-name "remacs")
 (defvar remacs-process nil)
 (defvar remacs-socket-dir
   (format "%s/remacs%d" (or (getenv "TMPDIR") "/tmp") (user-uid)))
@@ -62,12 +63,12 @@ To force-start a server, do \\[server-force-delete] and then
 		leave-dead
 	      (yes-or-no-p
 	       "The current server still has clients; delete them? ")))
-    (let ((server-file (expand-file-name server-name remacs-socket-dir)))
+    (let ((server-file (expand-file-name remacs-name remacs-socket-dir)))
       (when remacs-process
 	;; kill it dead!
 	(ignore-errors (delete-process remacs-process)))
       ;; Delete the socket files made by previous server invocations.
-      (if (not (eq t (server-running-p server-name)))
+      (if (not (eq t (server-running-p remacs-name)))
 	  ;; Remove any leftover socket or authentication file
 	  (ignore-errors (delete-file server-file))
 	(setq server-mode nil) ;; already set by the minor mode code
@@ -75,7 +76,7 @@ To force-start a server, do \\[server-force-delete] and then
 	 'server
 	 (concat "Unable to start remacs.\n"
 		 (format "There is an existing remacs server, named %S.\n"
-			 server-name)
+			 remacs-name)
 		 "To start remacs in this Emacs process, stop the existing
 remacs or call `M-x server-force-delete' to forcibly disconnect it.")
 	 :warning)
@@ -99,41 +100,37 @@ remacs or call `M-x server-force-delete' to forcibly disconnect it.")
 	  (add-hook 'kill-emacs-query-functions 'server-kill-emacs-query-function)
 	  (add-hook 'kill-emacs-hook (lambda () (server-mode -1)))
 	  (setq remacs-process
-		(make-network-process
-		       :name server-name
+		(apply #'make-network-process
+		       :name remacs-name
 		       :server t
 		       :noquery t
-               :buffer remacs-buffer
 		       :sentinel 'remacs-sentinel
 		       :filter 'remacs-process-filter
                :log 'remacs-process-log
 		       :coding 'raw-text-unix
-               :family 'local
-;               :service server-file
-               :local server-file
-               ))
+               (list :family 'local
+                     :service server-file
+                     )))
       (remacs-log server-file)
 	  (unless remacs-process (error "Could not start remacs process"))
 	  (process-put remacs-process :server-file server-file))))))
 
 (defun remacs-sentinel (proc msg)
   "The process sentinel for Emacs server connections."
-  (remacs-log "WTF"))
-
-  ;; ;; If this is a new client process, set the query-on-exit flag to nil
-  ;; ;; for this process (it isn't inherited from the server process).
-  ;; (when (and (eq (process-status proc) 'open)
-  ;;            (process-query-on-exit-flag proc))
-  ;;   (set-process-query-on-exit-flag proc nil))
-  ;; ;; Delete the associated connection file, if applicable.
-  ;; ;; Although there's no 100% guarantee that the file is owned by the
-  ;; ;; running Emacs instance, server-start uses server-running-p to check
-  ;; ;; for possible servers before doing anything, so it *should* be ours.
-  ;; (and (process-contact proc :server)
-  ;;      (eq (process-status proc) 'closed)
-  ;;      (ignore-errors (delete-file (process-get proc :server-file))))
-  ;; (server-log (format "Status changed to %s: %s" (process-status proc) msg) proc)
-  ;; (server-delete-client proc))
+  ;; If this is a new client process, set the query-on-exit flag to nil
+  ;; for this process (it isn't inherited from the server process).
+  (when (and (eq (process-status proc) 'open)
+             (process-query-on-exit-flag proc))
+    (set-process-query-on-exit-flag proc nil))
+  ;; Delete the associated connection file, if applicable.
+  ;; Although there's no 100% guarantee that the file is owned by the
+  ;; running Emacs instance, server-start uses server-running-p to check
+  ;; for possible servers before doing anything, so it *should* be ours.
+  (and (process-contact proc :server)
+       (eq (process-status proc) 'closed)
+       (ignore-errors (delete-file (process-get proc :server-file))))
+  (server-log (format "Status changed to %s: %s" (process-status proc) msg) proc)
+  (server-delete-client proc))
 
 (defun* remacs-process-filter (proc string)
   "Process a request from the server to edit some files.
@@ -399,8 +396,10 @@ If CLIENT is non-nil, add a description of it to the logged message."
 (defun remacs-process-log(server client msg)
   (remacs-log (format "%s : %s : %s" server client msg)))
 
-(setq remacs-log t)
-(toggle-debug-on-error)
-(remacs-start)
-(get-buffer-create remacs-buffer)
-(switch-to-buffer remacs-buffer)
+(defun remacs-test ()
+  (interactive)
+  (setq remacs-log t)
+  (toggle-debug-on-error)
+  (remacs-start)
+  (get-buffer-create remacs-buffer)
+  (switch-to-buffer remacs-buffer))

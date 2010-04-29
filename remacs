@@ -18,7 +18,7 @@
 #
 #
 # Author: Chris Newton <redshodan@gmail.com>
-# $Revision: a6b5c527f92b $
+# $Revision: 34856e984289 $
 #
 
 import os, sys, select, pty, termios, socket, threading, struct, fcntl
@@ -26,7 +26,7 @@ import errno, signal, re, ssl, subprocess
 from optparse import OptionParser
 
 # Command byte:
-#  - least significant 3 bites are command.
+#  - least significant 3 bits are command.
 #  - middle 4 bits are size of data.
 #  - most significant bit indicates size is number of size bytes.
 CMD_NONE = -1
@@ -355,6 +355,7 @@ class TTYManager(threading.Thread):
         self.outpipe.setPipes(self.tty, self.fdout, True, False)
 
     def run(self):
+        log("Starting TTYManager.run()")
         try:
             while len(self.ins) or len(self.outs):
                 if ((len(self.ins) == 1) and (self.ins[0] == self.fdin) and
@@ -368,7 +369,7 @@ class TTYManager(threading.Thread):
                         log("select err 4")
                         continue
                 try:
-                    log("ins: %s" % str(self.ins))
+                    self.logInOuts()
                     for fd in self.extra_fds:
                         if fd in ret[0]:
                             self.extra_fds_cb(fd)
@@ -391,6 +392,16 @@ class TTYManager(threading.Thread):
             import traceback
             traceback.print_exc()
 
+    def logInOuts(self):
+        msg = ""
+        for fd in self.ins:
+            msg = "%s, %d" % (msg, fd.fileno())
+        log("ins: %s" % msg)
+        msg = ""
+        for fd in self.outs:
+            msg = "%s, %d" % (msg, fd.fileno())
+        log("outs: %s" % msg)
+
     def sendCmd(self, cmd, data):
         self.outpipe.sendCmd(cmd, data)
 
@@ -401,7 +412,10 @@ class Server(object):
     
     def run(self):
         try:
-            self.pipe = open("/tmp/remacs%d/server" % os.geteuid(), "r+")
+            self.pipe = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            self.pipe.connect("/tmp/remacs%d/remacs" % os.geteuid())
+            log("connected to emacs server")
+            self.pipe.setblocking(0)
             (self.tty, self.slave) = pty.openpty()
             self.tty = os.fdopen(self.tty, "w+")
             fcntl.ioctl(self.tty, termios.TIOCSWINSZ,
