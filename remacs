@@ -22,7 +22,7 @@
 #
 
 import os, sys, select, pty, termios, socket, threading, struct, fcntl
-import errno, signal, re, ssl, subprocess
+import errno, signal, re, ssl, subprocess, time
 from optparse import OptionParser
 
 # Command byte:
@@ -61,15 +61,15 @@ def delList(val, list):
 
 def log(*args):
     for arg in args:
-        log_file.write("%s " % str(arg))
+        log_file.write("%d: %s " % (time.time(), str(arg)))
     log_file.write("\n")
     log_file.flush()
 
 class PipeBuff(object):
-    def __init__(self, decoder, cb, do_encode):
-        self.decoder = decoder
-        self.do_encode = do_encode
+    def __init__(self, cb, decoder, encoder):
         self.cb = cb
+        self.decoder = decoder
+        self.encoder = encoder
         self.reset()
 
     def reset(self):
@@ -90,7 +90,7 @@ class PipeBuff(object):
         if self.decoder:
             self.decodeCmd()
         else:
-            if self.do_encode:
+            if self.encoder:
                 self.encodeCmd(CMD_DATA, self.data)
                 log("encoded buff: %s" % self.output)
             else:
@@ -169,12 +169,12 @@ class PipeBuff(object):
             return ret
 
 class Pipe(object):
-    def __init__(self, ins, outs, ifd_is_sock, cb, do_encode):
+    def __init__(self, ins, outs, cb, decoder, encoder):
         self.ifd = None
         self.ofd = None
         self.ins = ins
         self.outs = outs
-        self.buff = PipeBuff(ifd_is_sock, cb, do_encode)
+        self.buff = PipeBuff(cb, decoder, encoder)
         self.reader = None
 
     def reset(self):
@@ -295,10 +295,9 @@ class Pipe(object):
         else:
             return False
 
-class TTYManager(threading.Thread):
+class TTYManager(object):
     def __init__(self, fdin, fdout, tty, cmd_cb, extra_fds=[],
                  extra_fds_cb=None):
-        threading.Thread.__init__(self)
         self.fdin = fdin
         self.fdout = fdout
         self.tty = tty
@@ -307,9 +306,8 @@ class TTYManager(threading.Thread):
         self.cmd_cb = cmd_cb
         self.extra_fds = extra_fds
         self.extra_fds_cb = extra_fds_cb
-        self.inpipe = Pipe(self.ins, self.outs, True, self.cmd_cb, False)
-        self.outpipe = Pipe(self.ins, self.outs, False, self.cmd_cb, True)
-        self.setDaemon(True)
+        self.inpipe = Pipe(self.ins, self.outs, self.cmd_cb, True, False)
+        self.outpipe = Pipe(self.ins, self.outs, self.cmd_cb, False, True)
         self.setup()
 
     def close(self):
@@ -323,7 +321,7 @@ class TTYManager(threading.Thread):
             pass
         try:
             termios.tcsetattr(self.tty, termios.TCSANOW, self.orig_tty)
-            os.close(self.tty)
+            self.tty.close()
         except:
             pass
 
@@ -364,6 +362,7 @@ class TTYManager(threading.Thread):
                     break
                 try:
                     ret = select.select(self.ins, self.outs, [], 10.0)
+                    log("select returned: %s" % (str(ret)))
                 except select.error, e:
                     if e[0] == 4:
                         log("select err 4")
@@ -395,27 +394,38 @@ class TTYManager(threading.Thread):
     def logInOuts(self):
         msg = ""
         for fd in self.ins:
-            msg = "%s, %d" % (msg, fd.fileno())
+            if len(msg):
+                msg = "%s, %d" % (msg, fd.fileno())
+            else:
+                msg = "%d" % (fd.fileno())
         log("ins: %s" % msg)
         msg = ""
         for fd in self.outs:
-            msg = "%s, %d" % (msg, fd.fileno())
+            if len(msg):
+                msg = "%s, %d" % (msg, fd.fileno())
+            else:
+                msg = "%d" % (fd.fileno())
         log("outs: %s" % msg)
+        log("IN: %s" % self.inpipe.buff.toStr())
+        log("OUT: %s" % self.outpipe.buff.toStr())
 
     def sendCmd(self, cmd, data):
         self.outpipe.sendCmd(cmd, data)
 
 class Server(object):
     def __init__(self):
-        self.started_emacs = False
+        self.started = False
+        self.sock = None
         self.pipe = None
     
     def run(self):
         try:
-            self.pipe = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-            self.pipe.connect("/tmp/remacs%d/remacs" % os.geteuid())
+            self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            self.sock.connect("/tmp/remacs%d/remacs" % os.geteuid())
             log("connected to emacs server")
-            self.pipe.setblocking(0)
+            self.sock.setblocking(0)
+            self.pipe = self.sock.makefile()
+            log("sock fd: %d" % self.pipe.fileno())
             (self.tty, self.slave) = pty.openpty()
             self.tty = os.fdopen(self.tty, "w+")
             fcntl.ioctl(self.tty, termios.TIOCSWINSZ,
@@ -431,10 +441,9 @@ class Server(object):
             self.mgr.close()
 
     def startEmacs(self, term):
-        sendToEmacs("tty", os.ttyname(self.slave), term)
-        sendFinish()
+        self.sendToEmacs("tty", os.ttyname(self.slave), term)
 
-    def escape(str):
+    def escape(self, str):
         ret = []
         if str[0] == "-":
             ret.append("&")
@@ -449,15 +458,28 @@ class Server(object):
                 ret.append(c)
         return "".join(ret)
 
-    def sendToEmacs(cmd, *args):
+    def sendToEmacs(self, cmd, *args):
         out = []
         for arg in args:
-            out.append(escape(arg.strip()))
-        self.pipe.write("-%s %s" % (cmd, " ".join(out)))
+            out.append(self.escape(arg.strip()))
+        log("sendToEmacs:", "-%s %s\n" % (cmd, " ".join(out)))
+        self.pipe.write("-%s %s\n" % (cmd, " ".join(out)))
 
     def pipe_cb(self, fd):
-        buff = self.pipe.read()
-        log("Got from emacs: " + buff)
+        buff = None
+        try:
+            buff = self.pipe.read()
+            log("pipe_cb: read: %s" % buff)
+        except OSError, e:
+            if e.errno == errno.EAGAIN:
+                log("pipe_cb: EAGAIN")
+                return
+            else:
+                log("pipe_cb: EXCEPT: %s" % e)
+                raise
+        log("Got from emacs: %s" % buff)
+        if not buff:
+            raise Exception("Lost connection to emacs")
         
     def cmd_cb(self, cmd, data):
         log("SERVER CMD: %s DATA: %s" % (cmd, data))
@@ -487,6 +509,7 @@ class Client(object):
             self.term = os.environ["TERM"]
         else:
             self.term = "xterm"
+        log("ssh cmd: %s" % self.cmd)
         
     def run(self):
         try:
@@ -497,7 +520,7 @@ class Client(object):
 
             signal.signal(signal.SIGWINCH, self.sigWINCH)
 
-            self.mgr = TTYManager(self.pipe.stdin, self.pipe.stdout,
+            self.mgr = TTYManager(self.pipe.stdout, self.pipe.stdin,
                                   self.tty, self.cmd_cb)
             self.sigWINCH(0, None)
             self.mgr.run()
