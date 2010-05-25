@@ -394,7 +394,7 @@ If CLIENT is non-nil, add a description of it to the logged message."
 (fset 'server-log 'remacs-log)
 
 (defun remacs-process-log(server client msg)
-  (remacs-log (format "%s : %s : %s" server client msg)))
+  (remacs-log msg client))
 
 (defun remacs-test ()
   (interactive)

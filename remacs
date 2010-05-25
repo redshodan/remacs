@@ -180,11 +180,9 @@ class Pipe(object):
     def reset(self):
         self.buff.reset()
 
-    def setPipes(self, ifd, ofd, iraw, oraw):
+    def setPipes(self, ifd, ofd):
         self.ifd = ifd
         self.ofd = ofd
-        self.iraw = iraw
-        self.oraw = oraw
 
     def sendCmd(self, cmd, data):
         self.buff.encodeCmd(cmd, data)
@@ -200,10 +198,7 @@ class Pipe(object):
         if do_read:
             try:
                 log("starting read(%s)" % str(self.ifd))
-                if self.iraw:
-                    data = os.read(self.ifd.fileno(), 1024)
-                else:
-                    data = self.ifd.read(1024)
+                data = self.ifd.read(1024)
                 if self.buff.data:
                     self.buff.data = self.buff.data + data
                 else:
@@ -248,10 +243,7 @@ class Pipe(object):
         if self.buff.output:
             try:
                 log("write(%s) %s" % (str(self.ifd.fileno()), self.buff.output))
-                if self.oraw:
-                    size = os.write(self.ofd.fileno(), self.buff.output)
-                else:
-                   size = self.ofd.write(self.buff.output)
+                size = self.ofd.write(self.buff.output)
                 log("write(%s) size %s" % (str(self.ifd.fileno()), str(size)))
             except OSError, e:
                 log("write(%s): EXC %s" % (str(self.ifd.fileno()), str(e)))
@@ -349,8 +341,8 @@ class TTYManager(object):
 
         self.ins.extend([self.fdin, self.tty])
         self.ins.extend(self.extra_fds)
-        self.inpipe.setPipes(self.fdin, self.tty, False, True)
-        self.outpipe.setPipes(self.tty, self.fdout, True, False)
+        self.inpipe.setPipes(self.fdin, self.tty)
+        self.outpipe.setPipes(self.tty, self.fdout)
 
     def run(self):
         log("Starting TTYManager.run()")
