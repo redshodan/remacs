@@ -18,7 +18,7 @@
 #
 #
 # Author: Chris Newton <redshodan@gmail.com>
-# $Revision: 34856e984289 $
+# $Revision$
 #
 
 import os, sys, select, pty, termios, socket, threading, struct, fcntl
