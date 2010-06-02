@@ -21,7 +21,7 @@
 # $Revision$
 #
 
-import os, sys, select, pty, termios, socket, threading, struct, fcntl
+import os, sys, select, pty, termios, socket, struct, fcntl
 import errno, signal, re, ssl, subprocess, time
 from optparse import OptionParser
 
@@ -198,17 +198,17 @@ class Pipe(object):
         if do_read:
             try:
                 log("starting read(%s)" % str(self.ifd))
-                data = self.ifd.read(1024)
+                data = os.read(self.ifd, 1024)
                 if self.buff.data:
                     self.buff.data = self.buff.data + data
                 else:
                     self.buff.data = data
-                log("read(%s): %d %s" % (str(self.ifd.fileno()), len(data),
+                log("read(%s): %s %s" % (str(self.ifd), len(data),
                                          data))
             except OSError, e:
-                log("read(%s): EXC: %s" % (str(self.ifd.fileno()), str(e)))
+                log("read(%s): EXC: %s" % (str(self.ifd), str(e)))
                 if e.errno == errno.EIO:
-                    log("read(%s): EXC: %s" % (str(self.ifd.fileno()), "EIO"))
+                    log("read(%s): EXC: %s" % (str(self.ifd), "EIO"))
                     delList(self.ifd, self.ins)
                     self.buff.reset()
                     return False
@@ -218,7 +218,7 @@ class Pipe(object):
                         return False
                 else:
                     log("read(%s): EXC: %s:%d" %
-                        (str(self.ifd.fileno()), e.errno))
+                        (str(self.ifd), e.errno))
                     raise
             except ssl.SSLError, e:
                 if e.errno == 2:
@@ -242,13 +242,13 @@ class Pipe(object):
             self.buff.filterData()
         if self.buff.output:
             try:
-                log("write(%s) %s" % (str(self.ifd.fileno()), self.buff.output))
-                size = self.ofd.write(self.buff.output)
-                log("write(%s) size %s" % (str(self.ifd.fileno()), str(size)))
+                log("write(%s) %s" % (str(self.ofd), self.buff.output))
+                size = os.write(self.ofd, self.buff.output)
+                log("write(%s) size %s" % (str(self.ofd), str(size)))
             except OSError, e:
-                log("write(%s): EXC %s" % (str(self.ifd.fileno()), str(e)))
+                log("write(%s): EXC %s" % (str(self.ofd), str(e)))
                 if e.errno == errno.EAGAIN:
-                    log("write(%s): EXC %s" % (str(self.ifd.fileno()), "EAGAIN"))
+                    log("write(%s): EXC %s" % (str(self.ofd), "EAGAIN"))
                     insList(self.ofd, self.outs)
                     delList(self.ifd, self.ins)
                     return False
@@ -271,13 +271,13 @@ class Pipe(object):
                 insList(self.ofd, self.outs)
                 delList(self.ifd, self.ins)
                 self.buff.output = self.buff.output[size:]
-                log("write(%s): %s partial %s" % (str(self.ifd.fileno()),
+                log("write(%s): %s partial %s" % (str(self.ofd),
                                                   str(size), self.buff.output))
                 return False
             elif size is None:
                 raise Exception("Connection lost on write")
             else:
-                log("write(%s): reset" % str(self.ifd.fileno()))
+                log("write(%s): reset" % str(self.ofd))
                 self.buff.reset()
                 insList(self.ifd, self.ins)
                 delList(self.ofd, self.outs)
@@ -304,16 +304,16 @@ class TTYManager(object):
 
     def close(self):
         try:
-            self.fdin.close()
+            os.close(self.fdin)
         except:
             pass
         try:
-            self.fdout.close()
+            os.close(self.fdout)
         except:
             pass
         try:
             termios.tcsetattr(self.tty, termios.TCSANOW, self.orig_tty)
-            self.tty.close()
+            os.close(self.tty)
         except:
             pass
 
@@ -328,16 +328,16 @@ class TTYManager(object):
                             termios.ECHOE|termios.ECHOK|
                             termios.IEXTEN|termios.ECHONL)
         new[1] = new[1] & ~termios.OPOST
-        termios.tcsetattr(self.tty.fileno(), termios.TCSANOW, new)
+        termios.tcsetattr(self.tty, termios.TCSANOW, new)
 
         log("fds: fdin=%d fdout=%d tty=%s" %
-            (self.fdin.fileno(), self.fdout.fileno(), self.tty.fileno()))
+            (self.fdin, self.fdout, self.tty))
         
-        fcntl.fcntl(self.tty.fileno(), fcntl.F_SETFL, os.O_NONBLOCK)
-        fcntl.fcntl(self.fdin.fileno(), fcntl.F_SETFL, os.O_NONBLOCK)
-        fcntl.fcntl(self.fdout.fileno(), fcntl.F_SETFL, os.O_NONBLOCK)
+        fcntl.fcntl(self.tty, fcntl.F_SETFL, os.O_NONBLOCK)
+        fcntl.fcntl(self.fdin, fcntl.F_SETFL, os.O_NONBLOCK)
+        fcntl.fcntl(self.fdout, fcntl.F_SETFL, os.O_NONBLOCK)
         for fd in self.extra_fds:
-            fcntl.fcntl(fd.fileno(), fcntl.F_SETFL, os.O_NONBLOCK)
+            fcntl.fcntl(fd, fcntl.F_SETFL, os.O_NONBLOCK)
 
         self.ins.extend([self.fdin, self.tty])
         self.ins.extend(self.extra_fds)
@@ -382,21 +382,22 @@ class TTYManager(object):
             log("Main loop exception: %s %s" % (type(e), str(e)))
             import traceback
             traceback.print_exc()
+            raise
 
     def logInOuts(self):
         msg = ""
         for fd in self.ins:
             if len(msg):
-                msg = "%s, %d" % (msg, fd.fileno())
+                msg = "%s, %s" % (msg, str(fd))
             else:
-                msg = "%d" % (fd.fileno())
+                msg = "%s" % str(fd)
         log("ins: %s" % msg)
         msg = ""
         for fd in self.outs:
             if len(msg):
-                msg = "%s, %d" % (msg, fd.fileno())
+                msg = "%s, %s" % (msg, str(fd))
             else:
-                msg = "%d" % (fd.fileno())
+                msg = "%s" % str(fd)
         log("outs: %s" % msg)
         log("IN: %s" % self.inpipe.buff.toStr())
         log("OUT: %s" % self.outpipe.buff.toStr())
@@ -414,15 +415,19 @@ class Server(object):
         try:
             self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
             self.sock.connect("/tmp/remacs%d/remacs" % os.geteuid())
+            # self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            # self.sock.connect(("localhost", 5050))
             log("connected to emacs server")
             self.sock.setblocking(0)
-            self.pipe = self.sock.makefile()
-            log("sock fd: %d" % self.pipe.fileno())
+            log("sock fd=%d" % self.sock.fileno())
+            self.pipe = self.sock.fileno()
+            log("sock pipe fd: %d" % self.pipe)
             (self.tty, self.slave) = pty.openpty()
-            self.tty = os.fdopen(self.tty, "w+")
+            #self.tty = os.fdopen(self.tty, "w+")
             fcntl.ioctl(self.tty, termios.TIOCSWINSZ,
                         struct.pack("HHHH", 24, 80, 0, 0))
-            self.mgr = TTYManager(sys.stdin, sys.stdout, self.tty, self.cmd_cb,
+            self.mgr = TTYManager(sys.stdin.fileno(), sys.stdout.fileno(),
+                                  self.tty, self.cmd_cb,
                                   [self.pipe], self.pipe_cb)
             self.mgr.run()
         except Exception, e:
@@ -454,14 +459,15 @@ class Server(object):
         out = []
         for arg in args:
             out.append(self.escape(arg.strip()))
-        log("sendToEmacs:", "-%s %s\n" % (cmd, " ".join(out)))
-        self.pipe.write("-%s %s\n" % (cmd, " ".join(out)))
+        log("sendToEmacs:-%s %s\n" % (cmd, " ".join(out)))
+        os.write(self.pipe, "-%s %s\n" % (cmd, " ".join(out)))
 
     def pipe_cb(self, fd):
+        log("pipe_cb")
         buff = None
         try:
-            buff = self.pipe.read()
-            log("pipe_cb: read: %s" % buff)
+            buff = os.read(self.pipe, 4096)
+            log("pipe_cb: read: %d: %s" % (len(buff), buff))
         except OSError, e:
             if e.errno == errno.EAGAIN:
                 log("pipe_cb: EAGAIN")
@@ -511,9 +517,13 @@ class Client(object):
                                          stderr=subprocess.PIPE, shell=True)
 
             signal.signal(signal.SIGWINCH, self.sigWINCH)
-
-            self.mgr = TTYManager(self.pipe.stdout, self.pipe.stdin,
-                                  self.tty, self.cmd_cb)
+            log("pipe.stdin: %d %s" % (self.pipe.stdin.fileno(),
+                                       str(self.pipe.stdin)))
+            log("pipe.stdout: %d %s" % (self.pipe.stdout.fileno(),
+                                        str(self.pipe.stdout)))
+            self.mgr = TTYManager(self.pipe.stdout.fileno(),
+                                  self.pipe.stdin.fileno(),
+                                  self.tty.fileno(), self.cmd_cb)
             self.sigWINCH(0, None)
             self.mgr.run()
         except Exception, e:
