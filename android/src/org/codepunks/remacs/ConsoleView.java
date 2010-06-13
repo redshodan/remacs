@@ -13,7 +13,7 @@ public class ConsoleView extends View
 {
     protected static final String TAG = "Remacs";
 
-    protected TTY mTty;
+    protected ConsoleTTY mTty;
     protected Paint mPaint;
     
     public ConsoleView(Context context, AttributeSet attrs)
@@ -21,7 +21,7 @@ public class ConsoleView extends View
         super(context, attrs);
 
 		mPaint = new Paint();
-        mTty = new TTY();
+        mTty = new ConsoleTTY();
     }
 
 	@Override public void onDraw(Canvas canvas)

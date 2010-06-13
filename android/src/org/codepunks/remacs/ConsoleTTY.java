@@ -18,7 +18,7 @@ import de.mud.terminal.VDUDisplay;
 import de.mud.terminal.vt320;
 
 
-public class TTY implements VDUDisplay, OnKeyListener
+public class ConsoleTTY implements VDUDisplay, OnKeyListener
 {
     protected static final String TAG = "Remacs";
 
@@ -26,27 +26,27 @@ public class TTY implements VDUDisplay, OnKeyListener
     {
         @Override public void write(byte[] b)
         {
-            Log.d(TAG, "TTY.Buffer.write");
+            Log.d(TAG, "ConsoleTTY.Buffer.write");
         }
         
         @Override public void write(int b)
         {
-            Log.d(TAG, "TTY.Buffer.write");
+            Log.d(TAG, "ConsoleTTY.Buffer.write");
         }
         
         @Override public void sendTelnetCommand(byte cmd)
         {
-            Log.d(TAG, "TTY.Buffer.sendTelnetCommand");
+            Log.d(TAG, "ConsoleTTY.Buffer.sendTelnetCommand");
         }
 
         @Override public void setWindowSize(int c, int r)
         {
-            Log.d(TAG, "TTY.Buffer.setWindowSize");
+            Log.d(TAG, "ConsoleTTY.Buffer.setWindowSize");
         }
         
         @Override public void debug(String s)
         {
-            Log.d(TAG, "TTY.Buffer.debug: " + s);
+            Log.d(TAG, "ConsoleTTY.Buffer.debug: " + s);
         }
     };
     
@@ -61,7 +61,7 @@ public class TTY implements VDUDisplay, OnKeyListener
 	protected int mCharHeight;
 	protected int mCharTop;
     
-    public TTY()
+    public ConsoleTTY()
     {
         mCanvas = new Canvas();
         mBuffer = new Buffer();
@@ -78,7 +78,7 @@ public class TTY implements VDUDisplay, OnKeyListener
 
     public void onSizeChanged(ConsoleView view)
     {
-        Log.d(TAG, "TTY.Buffer.onSizeChanged");
+        Log.d(TAG, "ConsoleTTY.Buffer.onSizeChanged");
 
         mView = view;
 
@@ -250,7 +250,7 @@ public class TTY implements VDUDisplay, OnKeyListener
 
     public void setColor(int index, int red, int green, int blue)
     {
-        Log.d(TAG, String.format("TTY.Buffer.setColor: %d: (%d,%d,%d)",
+        Log.d(TAG, String.format("ConsoleTTY.Buffer.setColor: %d: (%d,%d,%d)",
                                  index, red, green, blue));
         // if (index < color.length && index >= 16)
         // {
