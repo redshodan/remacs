@@ -2,6 +2,7 @@ package org.codepunks.remacs;
 
 import android.app.Activity;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
@@ -9,17 +10,21 @@ import android.widget.TextView;
 
 public class RemacsActivity extends Activity
 {
-    static final private int MENU_QUIT = Menu.FIRST;
+    protected static final String TAG = "Remacs";
+    protected static final int MENU_QUIT = Menu.FIRST;
     
     private ConsoleView mView;
     
     public RemacsActivity()
     {
+        Log.d(TAG, "RemacsActivity.()");
     }
 
     @Override public void onCreate(Bundle savedInstanceState)
     {
         super.onCreate(savedInstanceState);
+
+        Log.d(TAG, "RemacsActivity.onCreate");
 
         setContentView(R.layout.console_view);
         mView = (ConsoleView) findViewById(R.id.console);
