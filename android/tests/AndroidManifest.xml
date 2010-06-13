@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" 
+      package="org.codepunks.remacs.tests">
+    
+    <!-- We add an application tag here just so that we can indicate that
+         this package needs to link against the android.test library,
+         which is needed when building test cases. -->    
+    <application>
+        <uses-library android:name="android.test.runner" />
+    </application>
+
+  <instrumentation android:name="android.test.InstrumentationTestRunner"
+      android:targetPackage="org.codepunks.remacs"
+      android:label="Remacs Tests">
+  </instrumentation>  
+  
+  <uses-sdk android:targetSdkVersion="5" android:minSdkVersion="5" />
+
+</manifest>
