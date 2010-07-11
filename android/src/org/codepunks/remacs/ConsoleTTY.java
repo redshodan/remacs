@@ -144,8 +144,11 @@ public class ConsoleTTY implements VDUDisplay, OnKeyListener
 		mPaint.setFakeBoldText(true);
 
         resetColors();
-        
-        mBuffer.putString("fu!");
+    }
+
+    public void putString(String str)
+    {
+        mBuffer.putString(str);
     }
 
     public void onSizeChanged(ConsoleView view)

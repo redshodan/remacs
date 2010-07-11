@@ -15,6 +15,8 @@ public class ConsoleView extends View
 
     protected ConsoleTTY mTty;
     protected Paint mPaint;
+    protected Transport mTransport;
+    protected Thread mTransportThread;
     
     public ConsoleView(Context context, AttributeSet attrs)
     {
@@ -22,8 +24,19 @@ public class ConsoleView extends View
 
 		mPaint = new Paint();
         mTty = new ConsoleTTY();
+        mTty.putString("fu!");
+        mTransport = new TransportSSH(mTty, "10.0.2.2");
+        mTransportThread = new Thread(mTransport);
+        mTransportThread.setName("Transport");
+		mTransportThread.setDaemon(true);
+        mTransportThread.start();
     }
 
+    public void putString(String str)
+    {
+        mTty.putString(str);
+    }
+    
 	@Override public void onDraw(Canvas canvas)
     {
         Bitmap bitmap = mTty.onDraw(canvas);
