@@ -2,7 +2,7 @@ package org.codepunks.remacs;
 
 import android.util.Log;
 
-public class TransportCfg
+public class ConnectionCfg
 {
     public String host;
     public int port;
@@ -10,15 +10,17 @@ public class TransportCfg
     public String user;
     public String pass;
     public String charset;
+    public String term;
 
-    public TransportCfg(String ahost, int aport, String auser, String apass,
-                        String acharset)
+    public ConnectionCfg(String host, int port, String user, String pass,
+                         String charset, String term)
     {
-        host = ahost;
-        port = aport;
-        user = auser;
-        pass = apass;
-        charset = acharset;
+        this.host = host;
+        this.port = port;
+        this.user = user;
+        this.pass = pass;
+        this.charset = charset;
+        this.term = term;
     }
 
     public int getPort()

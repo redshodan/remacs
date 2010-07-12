@@ -15,10 +15,10 @@ public abstract class Transport implements Runnable
     public static final int BUFFER_SIZE = 4096;
 
     protected ConsoleTTY mTty;
-    protected TransportCfg mCfg;
+    protected ConnectionCfg mCfg;
     protected CharsetDecoder mDecoder;
     
-    public Transport(ConsoleTTY tty, TransportCfg cfg, int default_port)
+    public Transport(ConsoleTTY tty, ConnectionCfg cfg, int default_port)
     {
         mTty = tty;
         mCfg = cfg;

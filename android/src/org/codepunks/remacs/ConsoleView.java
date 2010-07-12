@@ -17,17 +17,17 @@ public class ConsoleView extends View
     protected Paint mPaint;
     protected Transport mTransport;
     protected Thread mTransportThread;
-    protected TransportCfg mTransportCfg;
+    protected ConnectionCfg mCfg;
     
     public ConsoleView(Context context, AttributeSet attrs)
     {
         super(context, attrs);
 
 		mPaint = new Paint();
-        mTty = new ConsoleTTY();
-        mTransportCfg = new TransportCfg("10.0.2.2", 22, "test", "test",
-                                         "UTF-8");
-        mTransport = new TransportSSH(mTty, mTransportCfg);
+        mCfg = new ConnectionCfg("10.0.2.2", 22, "test", "test", "UTF-8",
+                                 "screen");
+        mTty = new ConsoleTTY(mCfg);
+        mTransport = new TransportSSH(mTty, mCfg);
         mTransportThread = new Thread(mTransport);
         mTransportThread.setName("Transport");
 		mTransportThread.setDaemon(true);

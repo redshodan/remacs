@@ -119,8 +119,9 @@ public class ConsoleTTY implements VDUDisplay, OnKeyListener
             Log.d(TAG, "ConsoleTTY.Buffer.debug: " + s);
         }
     };
-    
-    ConsoleView mView;
+
+    protected ConnectionCfg mCfg;
+    protected ConsoleView mView;
 	protected Buffer mBuffer;
 	protected Bitmap mBitmap;
     protected Canvas mCanvas;
@@ -131,12 +132,15 @@ public class ConsoleTTY implements VDUDisplay, OnKeyListener
 	protected int mCharTop;
     protected Integer[] mColors;
     
-    public ConsoleTTY()
+    public ConsoleTTY(ConnectionCfg cfg)
     {
+        mCfg = cfg;
         mCanvas = new Canvas();
         mBuffer = new Buffer();
         mBuffer.setDisplay(this);
         mBuffer.setBufferSize(0);
+        mBuffer.setTerminalID(mCfg.term);
+        mBuffer.setAnswerBack(mCfg.term);
 
         mPaint = new Paint();
 		mPaint.setAntiAlias(true);

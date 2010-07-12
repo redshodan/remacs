@@ -24,7 +24,7 @@ public class TransportSSH
     protected Session mSess;
     protected InputStream mStdout;
     
-    public TransportSSH(ConsoleTTY tty, TransportCfg cfg)
+    public TransportSSH(ConsoleTTY tty, ConnectionCfg cfg)
     {
         super(tty, cfg, DEFAULT_PORT);
     }
