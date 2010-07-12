@@ -17,6 +17,7 @@ public class ConsoleView extends View
     protected Paint mPaint;
     protected Transport mTransport;
     protected Thread mTransportThread;
+    protected TransportCfg mTransportCfg;
     
     public ConsoleView(Context context, AttributeSet attrs)
     {
@@ -24,8 +25,9 @@ public class ConsoleView extends View
 
 		mPaint = new Paint();
         mTty = new ConsoleTTY();
-        mTty.putString("fu!");
-        mTransport = new TransportSSH(mTty, "10.0.2.2");
+        mTransportCfg = new TransportCfg("10.0.2.2", 22, "test", "test",
+                                         "UTF-8");
+        mTransport = new TransportSSH(mTty, mTransportCfg);
         mTransportThread = new Thread(mTransport);
         mTransportThread.setName("Transport");
 		mTransportThread.setDaemon(true);

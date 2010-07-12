@@ -151,6 +151,21 @@ public class ConsoleTTY implements VDUDisplay, OnKeyListener
         mBuffer.putString(str);
     }
 
+    public void putString(char[] s, byte[] wattrs, int start, int len)
+    {
+        mBuffer.putString(s, wattrs, start, len);
+    }
+
+    public void getTextWidths(char[] chars, int offset, float[] widths)
+    {
+        mPaint.getTextWidths(chars, 0, offset, widths);
+    }
+
+    public int getCharWidth()
+    {
+        return mCharWidth;
+    }
+    
     public void onSizeChanged(ConsoleView view)
     {
         Log.d(TAG, "ConsoleTTY.Buffer.onSizeChanged");

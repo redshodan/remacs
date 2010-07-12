@@ -22,31 +22,25 @@ public class TransportSSH
 
     protected Connection mConn;
     protected Session mSess;
-    protected InputStreamReader mStdout;
+    protected InputStream mStdout;
     
-    public TransportSSH(ConsoleTTY tty, String host, int port)
+    public TransportSSH(ConsoleTTY tty, TransportCfg cfg)
     {
-        super(tty, host, port);
-    }
-
-    public TransportSSH(ConsoleTTY tty, String host)
-    {
-        super(tty, host, DEFAULT_PORT);
+        super(tty, cfg, DEFAULT_PORT);
     }
 
     public void connect()
     {
         try
         {
-            mConn = new Connection(mHost, mPort);
+            mConn = new Connection(mCfg.host, mCfg.getPort());
             mConn.addConnectionMonitor(this);
             mConn.connect();
-            mConn.authenticateWithPassword("test", "test");
+            mConn.authenticateWithPassword(mCfg.user, mCfg.pass);
 
             mSess = mConn.openSession();
 			mSess.execCommand("uname -a && date && uptime && who");
-            mStdout =
-                new InputStreamReader(new StreamGobbler(mSess.getStdout()));
+            mStdout = new StreamGobbler(mSess.getStdout());
         }
         catch (IOException e)
         {
@@ -55,26 +49,11 @@ public class TransportSSH
         }
     }
     
-    public String read() throws IOException
+    public int read(byte[] buffer, int offset, int length) throws IOException
     {
-        char[] buff = new char[1024];
-        
-        buff[0] = '\0';
-        if (mStdout.read(buff) < 0)
-        {
-            return null;
-        }
-        else
-        {
-            return new String(buff);
-        }
+        return mStdout.read(buffer, offset, length);
     }
 
-    public int read(byte[] buffer, int offset) throws IOException
-    {
-        return 0;
-    }
-    
     public void write(byte[] buffer) throws IOException
     {
     }
