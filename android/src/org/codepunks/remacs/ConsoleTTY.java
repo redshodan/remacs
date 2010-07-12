@@ -122,6 +122,7 @@ public class ConsoleTTY implements VDUDisplay, OnKeyListener
 
     protected ConnectionCfg mCfg;
     protected ConsoleView mView;
+    protected Transport mTransport;
 	protected Buffer mBuffer;
 	protected Bitmap mBitmap;
     protected Canvas mCanvas;
@@ -132,13 +133,14 @@ public class ConsoleTTY implements VDUDisplay, OnKeyListener
 	protected int mCharTop;
     protected Integer[] mColors;
     
-    public ConsoleTTY(ConnectionCfg cfg)
+    public ConsoleTTY(ConsoleView view, ConnectionCfg cfg)
     {
+        mView = view;
         mCfg = cfg;
         mCanvas = new Canvas();
         mBuffer = new Buffer();
         mBuffer.setDisplay(this);
-        mBuffer.setBufferSize(0);
+        mBuffer.setBufferSize(mCfg.term_scrollback);
         mBuffer.setTerminalID(mCfg.term);
         mBuffer.setAnswerBack(mCfg.term);
 
@@ -148,6 +150,11 @@ public class ConsoleTTY implements VDUDisplay, OnKeyListener
 		mPaint.setFakeBoldText(true);
 
         resetColors();
+    }
+
+    public void setTransport(Transport transport)
+    {
+        mTransport = transport;
     }
 
     public void putString(String str)
@@ -195,7 +202,14 @@ public class ConsoleTTY implements VDUDisplay, OnKeyListener
 		mPaint.getTextWidths("X", widths);
 		mCharWidth = (int)Math.ceil(widths[0]);
 		mCharHeight = (int)Math.ceil(fm.descent - fm.top);
+        mCfg.term_width = width / mCharWidth;
+        mCfg.term_height = height / mCharHeight;
 
+        Log.d(TAG, String.format("Setting term size (%d,%d) (%d,%d)",
+                                 width, height,
+                                 mCfg.term_width, mCfg.term_height));
+        mBuffer.setScreenSize(mCfg.term_width, mCfg.term_height, false);
+        
         mFullRedraw = true;
     }
 

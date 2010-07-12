@@ -26,8 +26,11 @@ public class ConsoleView extends View
 		mPaint = new Paint();
         mCfg = new ConnectionCfg("10.0.2.2", 22, "test", "test", "UTF-8",
                                  "screen");
-        mTty = new ConsoleTTY(mCfg);
+        mCfg.term_scrollback = 100;
+        mTty = new ConsoleTTY(this, mCfg);
+        setOnKeyListener(mTty);
         mTransport = new TransportSSH(mTty, mCfg);
+        mTty.setTransport(mTransport);
         mTransportThread = new Thread(mTransport);
         mTransportThread.setName("Transport");
 		mTransportThread.setDaemon(true);

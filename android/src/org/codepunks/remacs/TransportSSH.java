@@ -23,10 +23,12 @@ public class TransportSSH
     protected Connection mConn;
     protected Session mSess;
     protected InputStream mStdout;
+    protected boolean mConnected;
     
     public TransportSSH(ConsoleTTY tty, ConnectionCfg cfg)
     {
         super(tty, cfg, DEFAULT_PORT);
+        mConnected = false;
     }
 
     public void connect()
@@ -39,8 +41,12 @@ public class TransportSSH
             mConn.authenticateWithPassword(mCfg.user, mCfg.pass);
 
             mSess = mConn.openSession();
-			mSess.execCommand("uname -a && date && uptime && who");
+			//mSess.execCommand("uname -a && date && uptime && who");
+            mSess.requestPTY(mCfg.term, mCfg.term_width, mCfg.term_height, 0, 0,
+                             null);
+            mSess.startShell();
             mStdout = new StreamGobbler(mSess.getStdout());
+            mConnected = true;
         }
         catch (IOException e)
         {
@@ -70,12 +76,18 @@ public class TransportSSH
     {
     }
 
+    public boolean isConnected()
+    {
+        return mConnected;
+    }
+    
     /*
      * ConnectionMonitor interface
      */
 	public void connectionLost(Throwable reason)
     {
         Log.i(TAG, "Connection lost");
+        mConnected = false;
 	}
 
 	public String[] replyToChallenge(String name, String instruction,

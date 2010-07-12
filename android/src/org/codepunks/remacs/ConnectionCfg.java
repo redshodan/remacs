@@ -11,6 +11,9 @@ public class ConnectionCfg
     public String pass;
     public String charset;
     public String term;
+    public int term_scrollback;
+    public int term_width;
+    public int term_height;
 
     public ConnectionCfg(String host, int port, String user, String pass,
                          String charset, String term)
@@ -21,6 +24,9 @@ public class ConnectionCfg
         this.pass = pass;
         this.charset = charset;
         this.term = term;
+        term_scrollback = 0;
+        term_width = 0;
+        term_height = 0;
     }
 
     public int getPort()
