@@ -62,4 +62,11 @@ public class RemacsActivity extends Activity
 
         return super.onOptionsItemSelected(item);
     }
+
+    @Override public void finish()
+    {
+        Log.d(TAG, "RemacsActivity.finish()");
+        mView.finish();
+        super.finish();
+    }
 }

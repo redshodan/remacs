@@ -31,7 +31,13 @@ public class TransportSSH
         mConnected = false;
     }
 
-    public void connect()
+    @Override public void stop()
+    {
+        mConn.close();
+        super.stop();
+    }
+
+    @Override public void connect()
     {
         try
         {
@@ -55,24 +61,32 @@ public class TransportSSH
         }
     }
     
-    public int read(byte[] buffer, int offset, int length) throws IOException
+    @Override public int read(byte[] buffer, int offset, int length)
+        throws IOException
     {
-        return mStdout.read(buffer, offset, length);
+        int count = mStdout.read(buffer, offset, length);
+        
+        if (count < 0)
+        {
+            stop();
+        }
+
+        return count;
     }
 
-    public void write(byte[] buffer) throws IOException
+    @Override public void write(byte[] buffer) throws IOException
     {
     }
     
-    public void write(int c) throws IOException
+    @Override public void write(int c) throws IOException
     {
     }
     
-    public void flush() throws IOException
+    @Override public void flush() throws IOException
     {
     }
     
-	public void close()
+	@Override public void close()
     {
     }
 
@@ -88,6 +102,7 @@ public class TransportSSH
     {
         Log.i(TAG, "Connection lost");
         mConnected = false;
+        // super.stop();
 	}
 
 	public String[] replyToChallenge(String name, String instruction,

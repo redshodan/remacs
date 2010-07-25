@@ -17,6 +17,7 @@ public abstract class Transport implements Runnable
     protected ConsoleTTY mTty;
     protected ConnectionCfg mCfg;
     protected CharsetDecoder mDecoder;
+    protected Thread mThread;
     
     public Transport(ConsoleTTY tty, ConnectionCfg cfg, int default_port)
     {
@@ -83,14 +84,27 @@ public abstract class Transport implements Runnable
                     cbuff.clear();
                     mTty.redraw();
                 }
-            } while (count > -1);
+            } while (!Thread.interrupted() && (count > -1));
         }
         catch (IOException e)
         {
             Log.w(TAG, e);
         }
     }
-        
+
+    public void start()
+    {
+        mThread = new Thread(this);
+        mThread.setName("Transport");
+        mThread.setDaemon(true);
+        mThread.start();
+    }
+
+    public void stop()
+    {
+        mThread.interrupt();
+    }
+    
     public abstract void connect();
     public abstract int read(byte[] buffer, int offset, int length)
         throws IOException;

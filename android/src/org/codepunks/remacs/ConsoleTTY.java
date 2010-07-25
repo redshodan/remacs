@@ -1,6 +1,7 @@
 package org.codepunks.remacs;
 
 
+import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
@@ -15,6 +16,7 @@ import android.view.View.OnKeyListener;
 
 import de.mud.terminal.VDUBuffer;
 import de.mud.terminal.VDUDisplay;
+import de.mud.terminal.VDUInput;
 import de.mud.terminal.vt320;
 
 
@@ -22,6 +24,8 @@ public class ConsoleTTY implements VDUDisplay, OnKeyListener
 {
     protected static final String TAG = "Remacs";
 
+	public final static int KEY_TRANSIENT =
+        VDUInput.KEY_CONTROL | VDUInput.KEY_SHIFT | VDUInput.KEY_ALT;
 	public final static int DEFAULT_FG_COLOR = 7;
 	public final static int DEFAULT_BG_COLOR = 0;
 	public final static Integer[] DEFAULT_COLORS = new Integer[]
@@ -120,8 +124,8 @@ public class ConsoleTTY implements VDUDisplay, OnKeyListener
         }
     };
 
-    protected ConnectionCfg mCfg;
     protected ConsoleView mView;
+    protected ConnectionCfg mCfg;
     protected Transport mTransport;
 	protected Buffer mBuffer;
 	protected Bitmap mBitmap;
@@ -132,6 +136,7 @@ public class ConsoleTTY implements VDUDisplay, OnKeyListener
 	protected int mCharHeight;
 	protected int mCharTop;
     protected Integer[] mColors;
+    protected int mModifiers;
     
     public ConsoleTTY(ConsoleView view, ConnectionCfg cfg)
     {
@@ -148,6 +153,8 @@ public class ConsoleTTY implements VDUDisplay, OnKeyListener
 		mPaint.setAntiAlias(true);
 		mPaint.setTypeface(Typeface.MONOSPACE);
 		mPaint.setFakeBoldText(true);
+
+        mModifiers = 0;
 
         resetColors();
     }
@@ -341,13 +348,72 @@ public class ConsoleTTY implements VDUDisplay, OnKeyListener
 
         return mBitmap;
     }
-    
-    public boolean onKey(View v, int keyCode, KeyEvent event)
+
+    public int vduModifiers()
     {
+        int ret = 0;
+        
+        if ((mModifiers & VDUInput.KEY_CONTROL) != 0)
+            ret |= VDUInput.KEY_CONTROL;
+        if ((mModifiers & VDUInput.KEY_SHIFT) != 0)
+            ret |= VDUInput.KEY_SHIFT;
+        if ((mModifiers & VDUInput.KEY_ALT) != 0)
+            ret |= VDUInput.KEY_ALT;
+
+        return ret;
+    }
+    
+    /*
+     * OnKeyListener interface
+     */
+    @Override public boolean onKey(View v, int keycode, KeyEvent event)
+    {
+        Log.d(TAG, String.format("onKey: %d %d", keycode, event));
+        
+        // hard buttons
+        switch (keycode)
+        {
+        case KeyEvent.KEYCODE_CAMERA:
+            break;
+        case KeyEvent.KEYCODE_DEL:
+            mBuffer.keyPressed(vt320.KEY_BACK_SPACE, ' ', vduModifiers());
+            mModifiers &= ~KEY_TRANSIENT;
+            return true;
+        case KeyEvent.KEYCODE_ENTER:
+            mBuffer.keyTyped(vt320.KEY_ENTER, ' ', 0);
+            mModifiers &= ~KEY_TRANSIENT;
+            return true;
+        case KeyEvent.KEYCODE_DPAD_LEFT:
+            mBuffer.keyPressed(vt320.KEY_LEFT, ' ', vduModifiers());
+            mModifiers &= ~KEY_TRANSIENT;
+            mView.vibrate();
+            return true;
+        case KeyEvent.KEYCODE_DPAD_UP:
+            mBuffer.keyPressed(vt320.KEY_UP, ' ', vduModifiers());
+            mModifiers &= ~KEY_TRANSIENT;
+            mView.vibrate();
+            return true;
+        case KeyEvent.KEYCODE_DPAD_DOWN:
+            mBuffer.keyPressed(vt320.KEY_DOWN, ' ', vduModifiers());
+            mModifiers &= ~KEY_TRANSIENT;
+            mView.vibrate();
+            return true;
+        case KeyEvent.KEYCODE_DPAD_RIGHT:
+            mBuffer.keyPressed(vt320.KEY_RIGHT, ' ', vduModifiers());
+            mModifiers &= ~KEY_TRANSIENT;
+            mView.vibrate();
+            return true;
+        case KeyEvent.KEYCODE_DPAD_CENTER:
+            return false;
+        }
+        
         return false;
     }
 
-    public void redraw()
+    /*
+     * VDUDisplay interface
+     */
+    @Override public void redraw()
     {
 		if (mView != null)
         {
@@ -355,20 +421,20 @@ public class ConsoleTTY implements VDUDisplay, OnKeyListener
         }
 	}
 
-    public void updateScrollBar()
+    @Override public void updateScrollBar()
     {
 	}
 
-    public void setVDUBuffer(VDUBuffer buffer)
+    @Override public void setVDUBuffer(VDUBuffer buffer)
     {
 	}
 
-    public VDUBuffer getVDUBuffer()
+    @Override public VDUBuffer getVDUBuffer()
     {
         return mBuffer;
 	}
 
-    public void setColor(int index, int red, int green, int blue)
+    @Override public void setColor(int index, int red, int green, int blue)
     {
         Log.d(TAG, String.format("ConsoleTTY.Buffer.setColor: %d: (%d,%d,%d)",
                                  index, red, green, blue));
@@ -378,7 +444,7 @@ public class ConsoleTTY implements VDUDisplay, OnKeyListener
         }
 	}
 
-    public void resetColors()
+    @Override public void resetColors()
     {
         mColors = DEFAULT_COLORS.clone();
 	}
