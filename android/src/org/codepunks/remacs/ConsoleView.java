@@ -8,6 +8,7 @@ import android.os.Vibrator;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.View;
+import android.view.View.OnKeyListener;
 
 
 public class ConsoleView extends View
@@ -35,6 +36,9 @@ public class ConsoleView extends View
         mTty.setTransport(mTransport);
         mTransport.start();
 
+        setFocusable(true);
+        setFocusableInTouchMode(true);
+        
         mVibrator = (Vibrator)context.getSystemService(Context.VIBRATOR_SERVICE);
     }
 
@@ -42,7 +46,7 @@ public class ConsoleView extends View
     {
         mTty.putString(str);
     }
-    
+
 	@Override public void onDraw(Canvas canvas)
     {
         Bitmap bitmap = mTty.onDraw(canvas);

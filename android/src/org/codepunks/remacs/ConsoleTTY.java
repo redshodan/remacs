@@ -10,6 +10,7 @@ import android.graphics.Typeface;
 import android.graphics.Bitmap.Config;
 import android.graphics.Paint.FontMetrics;
 import android.util.Log;
+import android.view.KeyCharacterMap;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.View.OnKeyListener;
@@ -24,8 +25,21 @@ public class ConsoleTTY implements VDUDisplay, OnKeyListener
 {
     protected static final String TAG = "Remacs";
 
-	public final static int KEY_TRANSIENT =
-        VDUInput.KEY_CONTROL | VDUInput.KEY_SHIFT | VDUInput.KEY_ALT;
+	public final static int MOD_CTRL_ON = 0x01;
+	public final static int MOD_CTRL_LOCK = 0x02;
+	public final static int MOD_ALT_ON = 0x04;
+	public final static int MOD_ALT_LOCK = 0x08;
+	public final static int MOD_SHIFT_ON = 0x10;
+	public final static int MOD_SHIFT_LOCK = 0x20;
+	public final static int MOD_SLASH = 0x40;
+	public final static int MOD_TAB = 0x80;
+	public final static int MOD_CTRL_MASK = MOD_CTRL_ON | MOD_CTRL_LOCK;
+	public final static int MOD_ALT_MASK = MOD_ALT_ON | MOD_ALT_LOCK;
+	public final static int MOD_SHIFT_MASK = MOD_SHIFT_ON | MOD_SHIFT_LOCK;
+	public final static int MOD_TRANSIENT_MASK =
+        MOD_CTRL_ON | MOD_ALT_ON | MOD_SHIFT_ON;
+    public final static int MOD_FAKE_MASK = MOD_SLASH | MOD_TAB;
+
 	public final static int DEFAULT_FG_COLOR = 7;
 	public final static int DEFAULT_BG_COLOR = 0;
 	public final static Integer[] DEFAULT_COLORS = new Integer[]
@@ -137,6 +151,7 @@ public class ConsoleTTY implements VDUDisplay, OnKeyListener
 	protected int mCharTop;
     protected Integer[] mColors;
     protected int mModifiers;
+	protected KeyCharacterMap mKeymap;
     
     public ConsoleTTY(ConsoleView view, ConnectionCfg cfg)
     {
@@ -155,7 +170,7 @@ public class ConsoleTTY implements VDUDisplay, OnKeyListener
 		mPaint.setFakeBoldText(true);
 
         mModifiers = 0;
-
+        mKeymap = KeyCharacterMap.load(KeyCharacterMap.BUILT_IN_KEYBOARD);
         resetColors();
     }
 
@@ -368,7 +383,7 @@ public class ConsoleTTY implements VDUDisplay, OnKeyListener
      */
     @Override public boolean onKey(View v, int keycode, KeyEvent event)
     {
-        Log.d(TAG, String.format("onKey: %d %d", keycode, event));
+        Log.d(TAG, String.format("onKey: %d %s", keycode, event.toString()));
         
         // hard buttons
         switch (keycode)
@@ -377,37 +392,134 @@ public class ConsoleTTY implements VDUDisplay, OnKeyListener
             break;
         case KeyEvent.KEYCODE_DEL:
             mBuffer.keyPressed(vt320.KEY_BACK_SPACE, ' ', vduModifiers());
-            mModifiers &= ~KEY_TRANSIENT;
+            mModifiers &= ~MOD_TRANSIENT_MASK;
             return true;
         case KeyEvent.KEYCODE_ENTER:
             mBuffer.keyTyped(vt320.KEY_ENTER, ' ', 0);
-            mModifiers &= ~KEY_TRANSIENT;
+            mModifiers &= ~MOD_TRANSIENT_MASK;
             return true;
         case KeyEvent.KEYCODE_DPAD_LEFT:
             mBuffer.keyPressed(vt320.KEY_LEFT, ' ', vduModifiers());
-            mModifiers &= ~KEY_TRANSIENT;
+            mModifiers &= ~MOD_TRANSIENT_MASK;
             mView.vibrate();
             return true;
         case KeyEvent.KEYCODE_DPAD_UP:
             mBuffer.keyPressed(vt320.KEY_UP, ' ', vduModifiers());
-            mModifiers &= ~KEY_TRANSIENT;
+            mModifiers &= ~MOD_TRANSIENT_MASK;
             mView.vibrate();
             return true;
         case KeyEvent.KEYCODE_DPAD_DOWN:
             mBuffer.keyPressed(vt320.KEY_DOWN, ' ', vduModifiers());
-            mModifiers &= ~KEY_TRANSIENT;
+            mModifiers &= ~MOD_TRANSIENT_MASK;
             mView.vibrate();
             return true;
         case KeyEvent.KEYCODE_DPAD_RIGHT:
             mBuffer.keyPressed(vt320.KEY_RIGHT, ' ', vduModifiers());
-            mModifiers &= ~KEY_TRANSIENT;
+            mModifiers &= ~MOD_TRANSIENT_MASK;
             mView.vibrate();
             return true;
         case KeyEvent.KEYCODE_DPAD_CENTER:
             return false;
         }
         
+        if (mKeymap.isPrintingKey(keycode) ||
+            (keycode == KeyEvent.KEYCODE_SPACE))
+        {
+            int mods = 0;
+            if ((mModifiers & MOD_SHIFT_MASK) != 0)
+            {
+                mods |= KeyEvent.META_SHIFT_ON;
+                mModifiers &= ~MOD_SHIFT_ON;
+            }
+
+            if ((mModifiers & MOD_ALT_MASK) != 0)
+            {
+                mods |= KeyEvent.META_ALT_ON;
+                mModifiers &= ~MOD_ALT_ON;
+            }
+
+            int key = mKeymap.get(keycode, mods);
+            if ((mModifiers & MOD_CTRL_MASK) != 0)
+            {
+                mModifiers &= ~MOD_CTRL_ON;
+
+                // CTRL-a through CTRL-z
+                if (key >= 0x61 && key <= 0x7A)
+                {
+                    key -= 0x60;
+                }
+                // CTRL-A through CTRL-_
+                else if (key >= 0x41 && key <= 0x5F)
+                {
+                    key -= 0x40;
+                }
+                else if (key == 0x20)
+                {
+                    key = 0x00;
+                }
+                else if (key == 0x3F)
+                {
+                    key = 0x7F;
+                }
+            }
+
+            if (((mods & KeyEvent.META_SHIFT_ON) != 0) &&
+                sendFunctionKey(keycode))
+            {
+                return true;
+            }
+                
+            // if (key < 0x80)
+            // {
+            //     transport.write(key);
+            // }
+            // else
+            // {
+            //     transport.write(new String(Character.toChars(key))
+            //                     .getBytes(host.getEncoding()));
+            // }
+
+            return true;
+        }
+
         return false;
+    }
+
+    private boolean sendFunctionKey(int keycode) {
+        switch (keycode) {
+        case KeyEvent.KEYCODE_1:
+            mBuffer.keyPressed(vt320.KEY_F1, ' ', 0);
+            return true;
+        case KeyEvent.KEYCODE_2:
+            mBuffer.keyPressed(vt320.KEY_F2, ' ', 0);
+            return true;
+        case KeyEvent.KEYCODE_3:
+            mBuffer.keyPressed(vt320.KEY_F3, ' ', 0);
+            return true;
+        case KeyEvent.KEYCODE_4:
+            mBuffer.keyPressed(vt320.KEY_F4, ' ', 0);
+            return true;
+        case KeyEvent.KEYCODE_5:
+            mBuffer.keyPressed(vt320.KEY_F5, ' ', 0);
+            return true;
+        case KeyEvent.KEYCODE_6:
+            mBuffer.keyPressed(vt320.KEY_F6, ' ', 0);
+            return true;
+        case KeyEvent.KEYCODE_7:
+            mBuffer.keyPressed(vt320.KEY_F7, ' ', 0);
+            return true;
+        case KeyEvent.KEYCODE_8:
+            mBuffer.keyPressed(vt320.KEY_F8, ' ', 0);
+            return true;
+        case KeyEvent.KEYCODE_9:
+            mBuffer.keyPressed(vt320.KEY_F9, ' ', 0);
+            return true;
+        case KeyEvent.KEYCODE_0:
+            mBuffer.keyPressed(vt320.KEY_F10, ' ', 0);
+            return true;
+        default:
+            return false;
+        }
     }
 
     /*
