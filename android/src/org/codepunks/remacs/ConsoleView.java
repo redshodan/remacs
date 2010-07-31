@@ -27,7 +27,9 @@ public class ConsoleView extends View
         super(context, attrs);
 
 		mPaint = new Paint();
-        mCfg = new ConnectionCfg("10.0.2.2", 22, "remacs", "remacs", "UTF-8",
+        // mCfg = new ConnectionCfg("10.0.2.2", 22, "remacs", "remacs", "UTF-8",
+        //                          "screen");
+        mCfg = new ConnectionCfg("10.1.1.20", 22, "remacs", "remacs", "UTF-8",
                                  "screen");
         mCfg.term_scrollback = 100;
         mTty = new ConsoleTTY(this, mCfg);
