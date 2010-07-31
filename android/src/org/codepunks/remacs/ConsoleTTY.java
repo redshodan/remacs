@@ -5,7 +5,11 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.Matrix;
 import android.graphics.Paint;
+import android.graphics.Path;
+import android.graphics.PixelXorXfermode;
+import android.graphics.RectF;
 import android.graphics.Typeface;
 import android.graphics.Bitmap.Config;
 import android.graphics.Paint.FontMetrics;
@@ -45,6 +49,8 @@ public class ConsoleTTY implements VDUDisplay, OnKeyListener
 
 	public final static int DEFAULT_FG_COLOR = 7;
 	public final static int DEFAULT_BG_COLOR = 0;
+    public final int BLACK = 0;
+    public final int WHITE = 15;
 	public final static Integer[] DEFAULT_COLORS = new Integer[]
     {
     0xff000000, // black
@@ -183,6 +189,12 @@ public class ConsoleTTY implements VDUDisplay, OnKeyListener
 	protected int mCharTop;
     protected Integer[] mColors;
     protected int mModifiers;
+	// Cursor paints to distinguish modes
+	protected Paint mCursorPaint;
+	protected Paint mCursorStrokePaint;
+	private Path mCtrlCursor, mAltCursor, mShiftCursor;
+	private RectF mScaleSrc, mScaleDst;
+	private Matrix mScaleMatrix;
     
     public ConsoleTTY(ConsoleView view, ConnectionCfg cfg)
     {
@@ -201,8 +213,42 @@ public class ConsoleTTY implements VDUDisplay, OnKeyListener
 		mPaint.setTypeface(Typeface.MONOSPACE);
 		mPaint.setFakeBoldText(true);
 
-        mModifiers = 0;
         resetColors();
+
+        mCursorPaint = new Paint();
+		mCursorPaint.setColor(mColors[WHITE]);
+		mCursorPaint.setXfermode(
+            new PixelXorXfermode(mColors[DEFAULT_BG_COLOR]));
+		mCursorPaint.setAntiAlias(true);
+
+		mCursorStrokePaint = new Paint(mCursorPaint);
+		mCursorStrokePaint.setStrokeWidth(0.1f);
+		mCursorStrokePaint.setStyle(Paint.Style.STROKE);
+
+		/*
+		 * Set up our cursor indicators on a 1x1 Path object which we can later
+		 * transform to our character width and height
+		 */
+		// TODO make this into a resource somehow
+		mShiftCursor = new Path();
+		mShiftCursor.lineTo(0.5f, 0.33f);
+		mShiftCursor.lineTo(1.0f, 0.0f);
+
+		mAltCursor = new Path();
+		mAltCursor.moveTo(0.0f, 1.0f);
+		mAltCursor.lineTo(0.5f, 0.66f);
+		mAltCursor.lineTo(1.0f, 1.0f);
+
+		mCtrlCursor = new Path();
+		mCtrlCursor.moveTo(0.0f, 0.25f);
+		mCtrlCursor.lineTo(1.0f, 0.5f);
+		mCtrlCursor.lineTo(0.0f, 0.75f);
+
+		// For creating the transform when the terminal resizes
+		mScaleSrc = new RectF();
+		mScaleSrc.set(0.0f, 0.0f, 1.0f, 1.0f);
+		mScaleDst = new RectF();
+		mScaleMatrix = new Matrix();
     }
 
     public void setTransport(Transport transport)
@@ -230,7 +276,7 @@ public class ConsoleTTY implements VDUDisplay, OnKeyListener
     {
         return mCharWidth;
     }
-    
+
     public void onSizeChanged(ConsoleView view)
     {
         Log.d(TAG, "ConsoleTTY.Buffer.onSizeChanged");
@@ -263,11 +309,16 @@ public class ConsoleTTY implements VDUDisplay, OnKeyListener
                                  width, height,
                                  mCfg.term_width, mCfg.term_height));
         mBuffer.setScreenSize(mCfg.term_width, mCfg.term_height, false);
+
+		// Create a scale matrix to scale our 1x1 representation of the cursor
+		mScaleDst.set(0.0f, 0.0f, mCharWidth, mCharHeight);
+		mScaleMatrix.setRectToRect(mScaleSrc, mScaleDst,
+                                   Matrix.ScaleToFit.FILL);
         
         mFullRedraw = true;
     }
 
-    public Bitmap onDraw(Canvas pcanvas)
+    public void onDraw(Canvas pcanvas)
     {
         boolean redraw = false;
         if (mBuffer.update[0] || mFullRedraw)
@@ -393,7 +444,52 @@ public class ConsoleTTY implements VDUDisplay, OnKeyListener
 
         mBuffer.update[0] = false;
 
-        return mBitmap;
+        pcanvas.drawBitmap(mBitmap, 0, 0, mPaint);
+
+        if (mBuffer.isCursorVisible())
+        {
+            int col = mBuffer.getCursorColumn();
+            int row = mBuffer.getCursorRow();
+            int cols = mBuffer.getColumns();
+
+            if (col == cols)
+            {
+                col = cols - 1;
+            }
+
+            int attr = mBuffer.getAttributes(col, row);
+            int x = col * mCharWidth;
+            int y = ((row + mBuffer.screenBase - mBuffer.windowBase) *
+                     mCharHeight);
+            int w = ((attr & VDUBuffer.FULLWIDTH) != 0 ? 2 : 1);
+
+            // Save the current clip and translation
+            pcanvas.save();
+            pcanvas.translate(x, y);
+            pcanvas.clipRect(0, 0, mCharWidth * w , mCharHeight);
+            pcanvas.drawPaint(mCursorPaint);
+
+            // Make sure we scale our decorations to the correct size.
+            pcanvas.concat(mScaleMatrix);
+
+            if ((mModifiers & MOD_SHIFT_ON) != 0)
+                pcanvas.drawPath(mShiftCursor, mCursorStrokePaint);
+            else if ((mModifiers & MOD_SHIFT_LOCK) != 0)
+                pcanvas.drawPath(mShiftCursor, mCursorPaint);
+
+            if ((mModifiers & MOD_ALT_ON) != 0)
+                pcanvas.drawPath(mAltCursor, mCursorStrokePaint);
+            else if ((mModifiers & MOD_ALT_LOCK) != 0)
+                pcanvas.drawPath(mAltCursor, mCursorPaint);
+
+            if ((mModifiers & MOD_CTRL_ON) != 0)
+                pcanvas.drawPath(mCtrlCursor, mCursorStrokePaint);
+            else if ((mModifiers & MOD_CTRL_LOCK) != 0)
+                pcanvas.drawPath(mCtrlCursor, mCursorPaint);
+
+            // Restore previous clip region
+            pcanvas.restore();
+        }
     }
 
     public int vduModifiers()
