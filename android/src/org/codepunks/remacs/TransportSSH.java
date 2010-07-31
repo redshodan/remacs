@@ -5,6 +5,7 @@ import android.util.Log;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 
 import ch.ethz.ssh2.Connection;
 import ch.ethz.ssh2.ConnectionMonitor;
@@ -23,6 +24,7 @@ public class TransportSSH
     protected Connection mConn;
     protected Session mSess;
     protected InputStream mStdout;
+    protected OutputStream mStdin;
     protected boolean mConnected;
     
     public TransportSSH(ConsoleTTY tty, ConnectionCfg cfg)
@@ -52,6 +54,7 @@ public class TransportSSH
                              null);
             mSess.startShell();
             mStdout = new StreamGobbler(mSess.getStdout());
+            mStdin = mSess.getStdin();
             mConnected = true;
         }
         catch (IOException e)
@@ -76,10 +79,12 @@ public class TransportSSH
 
     @Override public void write(byte[] buffer) throws IOException
     {
+        mStdin.write(buffer);
     }
     
     @Override public void write(int c) throws IOException
     {
+        mStdin.write(c);
     }
     
     @Override public void flush() throws IOException

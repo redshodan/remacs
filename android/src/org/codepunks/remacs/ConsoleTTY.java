@@ -20,6 +20,8 @@ import de.mud.terminal.VDUDisplay;
 import de.mud.terminal.VDUInput;
 import de.mud.terminal.vt320;
 
+import java.io.IOException;
+
 
 public class ConsoleTTY implements VDUDisplay, OnKeyListener
 {
@@ -114,27 +116,18 @@ public class ConsoleTTY implements VDUDisplay, OnKeyListener
     {
         @Override public void write(byte[] b)
         {
-            Log.d(TAG, "ConsoleTTY.Buffer.write");
         }
-        
         @Override public void write(int b)
         {
-            Log.d(TAG, "ConsoleTTY.Buffer.write");
         }
-        
         @Override public void sendTelnetCommand(byte cmd)
         {
-            Log.d(TAG, "ConsoleTTY.Buffer.sendTelnetCommand");
         }
-
         @Override public void setWindowSize(int c, int r)
         {
-            Log.d(TAG, "ConsoleTTY.Buffer.setWindowSize");
         }
-        
         @Override public void debug(String s)
         {
-            Log.d(TAG, "ConsoleTTY.Buffer.debug: " + s);
         }
     };
 
@@ -374,7 +367,8 @@ public class ConsoleTTY implements VDUDisplay, OnKeyListener
             ret |= VDUInput.KEY_SHIFT;
         if ((mModifiers & VDUInput.KEY_ALT) != 0)
             ret |= VDUInput.KEY_ALT;
-
+        mModifiers &= ~MOD_TRANSIENT_MASK;
+        
         return ret;
     }
     
@@ -385,7 +379,11 @@ public class ConsoleTTY implements VDUDisplay, OnKeyListener
     {
         Log.d(TAG, String.format("onKey: %d %s", keycode, event.toString()));
         
-        // hard buttons
+        // hard buttons. Only pay attention to keyups for hard buttons.
+        if (event.getAction() == KeyEvent.ACTION_UP)
+        {
+            return false;
+        }
         switch (keycode)
         {
         case KeyEvent.KEYCODE_CAMERA:
@@ -400,28 +398,24 @@ public class ConsoleTTY implements VDUDisplay, OnKeyListener
             return true;
         case KeyEvent.KEYCODE_DPAD_LEFT:
             mBuffer.keyPressed(vt320.KEY_LEFT, ' ', vduModifiers());
-            mModifiers &= ~MOD_TRANSIENT_MASK;
             mView.vibrate();
             return true;
         case KeyEvent.KEYCODE_DPAD_UP:
             mBuffer.keyPressed(vt320.KEY_UP, ' ', vduModifiers());
-            mModifiers &= ~MOD_TRANSIENT_MASK;
             mView.vibrate();
             return true;
         case KeyEvent.KEYCODE_DPAD_DOWN:
             mBuffer.keyPressed(vt320.KEY_DOWN, ' ', vduModifiers());
-            mModifiers &= ~MOD_TRANSIENT_MASK;
             mView.vibrate();
             return true;
         case KeyEvent.KEYCODE_DPAD_RIGHT:
             mBuffer.keyPressed(vt320.KEY_RIGHT, ' ', vduModifiers());
-            mModifiers &= ~MOD_TRANSIENT_MASK;
             mView.vibrate();
             return true;
         case KeyEvent.KEYCODE_DPAD_CENTER:
             return false;
         }
-        
+
         if (mKeymap.isPrintingKey(keycode) ||
             (keycode == KeyEvent.KEYCODE_SPACE))
         {
@@ -468,16 +462,24 @@ public class ConsoleTTY implements VDUDisplay, OnKeyListener
             {
                 return true;
             }
-                
-            // if (key < 0x80)
-            // {
-            //     transport.write(key);
-            // }
-            // else
-            // {
-            //     transport.write(new String(Character.toChars(key))
-            //                     .getBytes(host.getEncoding()));
-            // }
+
+            try
+            {
+                if (key < 0x80)
+                {
+                    mTransport.write(key);
+                }
+                else
+                {
+                    mTransport.write(new String(Character.toChars(key))
+                                     .getBytes(mCfg.charset));
+                }
+            }
+            catch (IOException ex)
+            {
+                Log.w(TAG, "Failure writing to transport");
+                Log.w(TAG, ex);
+            }
 
             return true;
         }
