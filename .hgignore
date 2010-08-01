@@ -2,3 +2,4 @@ log-server
 log-client
 android/bin
 android/gen
+android/local.properties

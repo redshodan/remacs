@@ -139,13 +139,13 @@ public class ConsoleTTY implements VDUDisplay, OnKeyListener
     /*
      * OnKeyListener interface
      */
-    @Override public boolean onKey(View v, int keycode, KeyEvent event)
+    public boolean onKey(View v, int keycode, KeyEvent event)
     {
-        int keychar = event.getUnicodeChar();
+        // int keychar = event.getUnicodeChar();
         int modchar = 0;
         int mods = 0;
         boolean shifted = false;
-        boolean alted = false;
+        // boolean alted = false;
         boolean ctrled = false;
         if ((mModifiers & MOD_SHIFT_MASK) != 0)
         {
@@ -155,7 +155,7 @@ public class ConsoleTTY implements VDUDisplay, OnKeyListener
         if ((mModifiers & MOD_ALT_MASK) != 0)
         {
             mods |= KeyEvent.META_ALT_ON;
-            alted = true;
+            // alted = true;
         }
         if ((mModifiers & MOD_CTRL_ON) != 0)
         {
@@ -338,7 +338,7 @@ public class ConsoleTTY implements VDUDisplay, OnKeyListener
     /*
      * VDUDisplay interface
      */
-    @Override public void redraw()
+    public void redraw()
     {
 		if (mView != null)
         {
@@ -346,20 +346,20 @@ public class ConsoleTTY implements VDUDisplay, OnKeyListener
         }
 	}
 
-    @Override public void updateScrollBar()
+    public void updateScrollBar()
     {
 	}
 
-    @Override public void setVDUBuffer(VDUBuffer buffer)
+    public void setVDUBuffer(VDUBuffer buffer)
     {
 	}
 
-    @Override public VDUBuffer getVDUBuffer()
+    public VDUBuffer getVDUBuffer()
     {
         return mBuffer;
 	}
 
-    @Override public void setColor(int index, int red, int green, int blue)
+    public void setColor(int index, int red, int green, int blue)
     {
         Log.d(TAG, String.format("ConsoleTTY.Buffer.setColor: %d: (%d,%d,%d)",
                                  index, red, green, blue));
@@ -369,7 +369,7 @@ public class ConsoleTTY implements VDUDisplay, OnKeyListener
         }
 	}
 
-    @Override public void resetColors()
+    public void resetColors()
     {
         mColors = Colors.DEFAULT_COLORS.clone();
 	}
