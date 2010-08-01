@@ -2,6 +2,7 @@ package org.codepunks.remacs;
 
 import android.util.Log;
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
 import java.nio.charset.Charset;
@@ -13,11 +14,34 @@ public abstract class Transport implements Runnable
 {
     protected static final String TAG = "Remacs";
     public static final int BUFFER_SIZE = 4096;
+ 
+    // Command byte:
+    //  - least significant 3 bits are command.
+    //  - middle 4 bits are size of data.
+    //  - most significant bit indicates size is number of size bytes.
+    public final int CMD_NONE = -1;
+    public final int CMD_DATA = 0;
+    public final int CMD_TTY = 1;
+    public final int CMD_MAX = 7;
+    public final int CMD_CMDS = 1 | 2 | 4;
+    public final int CMD_SIZE_MAX = 15;
+    public final int CMD_SIZE_MAXED = 128;
 
     protected ConsoleTTY mTty;
     protected ConnectionCfg mCfg;
-    protected CharsetDecoder mDecoder;
     protected Thread mThread;
+    // String decoding
+    protected CharsetDecoder mDecoder;
+    protected ByteBuffer mBBuff;
+    protected CharBuffer mCBuff;
+    protected byte[] mBytes;
+    protected char[] mChars;
+    protected byte[] mWAttrs;
+    protected float[] mWidths;
+    protected int mCWidth;
+    // Remacs Protocol handling
+    protected long mCmd = CMD_NONE;
+    protected long mCmdLength = 0;
     
     public Transport(ConsoleTTY tty, ConnectionCfg cfg, int default_port)
     {
@@ -35,54 +59,138 @@ public abstract class Transport implements Runnable
         mTty.putString(str);
     }
 
+    public void sendCmd(long cmd, String data)
+    {
+        Log.d(TAG, String.format("Sending cmd=%d: %s", cmd, data));
+        try
+        {
+            sendCmd(cmd, data.getBytes(mCfg.charset));
+        }
+        catch (UnsupportedEncodingException ex)
+        {
+            Log.w(TAG, "Failed to write", ex);
+        }
+    }
+
+    public void sendCmd(long cmd, byte[] data)
+    {
+        try
+        {
+            long length = data.length;
+            Log.d(TAG, String.format("Sending cmd=%d len=%d", cmd, length));
+
+            if ((data != null) && (length > 0))
+            {
+                byte[] cbuff;
+                long offset;
+                if (length <= CMD_SIZE_MAX + 1)
+                {
+                    cmd = cmd + (length << 3);
+                    offset = 1;
+                }
+                else
+                {
+                    cmd = cmd + CMD_SIZE_MAXED;
+                    offset = 5;
+                }
+                cbuff = new byte[(int)(length + offset)];
+                cbuff[0] = (byte)(cmd & 0xFF);
+                if (offset == 5)
+                {
+                    cbuff[1] = (byte)((length & 0xFF000000L) >> 24);
+                    cbuff[2] = (byte)((length & 0x00FF0000L) >> 16);
+                    cbuff[3] = (byte)((length & 0x0000FF00L) >> 8);
+                    cbuff[4] = (byte)(length & 0x000000FFL);
+                }
+                for (int i = 0; i < length; ++i)
+                {
+                    cbuff[(int)(offset + i)] = data[i];
+                }
+                write(cbuff);
+            }
+            else
+            {
+                write((byte)(cmd & 0xFF));
+            }
+        }
+        catch (IOException ex)
+        {
+            Log.w(TAG, "Failed to write", ex);
+        }
+    }
+
+    public void sendTTY(boolean initial)
+    {
+        String data;
+
+        if (initial)
+        {
+            data = String.format("term=%s;row=%d;col=%d", mCfg.term,
+                                 mCfg.term_width, mCfg.term_height);
+        }
+        else
+        {
+            data = String.format("row=%d;col=%d", mCfg.term_width,
+                                 mCfg.term_height);
+        }
+        sendCmd(CMD_TTY, data);
+    }
+    
     public void run()
     {
         connect();
+        sendTTY(true);
         
         try
         {
-            int length;
             int count;
-            ByteBuffer bbuff = ByteBuffer.allocate(BUFFER_SIZE);
-            CharBuffer cbuff = CharBuffer.allocate(BUFFER_SIZE);
-            byte[] bytes = bbuff.array();
-            char[] chars = cbuff.array();
-            byte[] wattrs = new byte[BUFFER_SIZE];
-            float[] widths = new float[BUFFER_SIZE];
-            int cwidth = mTty.getCharWidth();
+            mBBuff = ByteBuffer.allocate(BUFFER_SIZE);
+            mCBuff = CharBuffer.allocate(BUFFER_SIZE);
+            mBytes = mBBuff.array();
+            mChars = mCBuff.array();
+            mWAttrs = new byte[BUFFER_SIZE];
+            mWidths = new float[BUFFER_SIZE];
+            mCWidth = mTty.getCharWidth();
 
-            bbuff.limit(0);
+            mBBuff.limit(0);
             do
             {
-                count = read(bytes, bbuff.arrayOffset() + bbuff.limit(),
-                             bbuff.capacity() - bbuff.limit());
+                count = read(mBytes, mBBuff.arrayOffset() + mBBuff.limit(),
+                             mBBuff.capacity() - mBBuff.limit());
                 if (count > 0)
                 {
-                    bbuff.limit(bbuff.limit() + count);
-                    CoderResult result = mDecoder.decode(bbuff, cbuff, false);
-					if (result.isUnderflow() &&
-                        (bbuff.limit() == bbuff.capacity()))
+                    mBBuff.limit(mBBuff.limit() + count);
+                    try
                     {
-						bbuff.compact();
-						bbuff.limit(bbuff.position());
-						bbuff.position(0);
-					}
-                    length = cbuff.position();
-                    mTty.getTextWidths(chars, length, widths);
-                    for (int i = 0; i < length; ++i)
-                    {
-                        if ((int)widths[i] != cwidth)
+                        if (mCmd == CMD_NONE)
                         {
-                            wattrs[i] = (byte)1;
+                            mCmd = mBBuff.get();
+                            Log.d(TAG, String.format("unpacked cmd=%d", mCmd));
+                            if ((mCmd & CMD_SIZE_MAXED) != 0)
+                            {
+                                mCmdLength = mBBuff.getInt();
+                            }
+                            else
+                            {
+                                mCmdLength = (mCmd & 0xFF) >> 3;
+                            }
+                            mCmd = mCmd & CMD_CMDS;
+                        }
+                        int blen = mBBuff.remaining();
+                        if (blen < mCmdLength)
+                        {
+                            continue;
                         }
                         else
                         {
-                            wattrs[i] = (byte)0;
+                            decodeStringData(blen);
                         }
+                        Log.d(TAG, String.format("Decoded mCmd=%d mCmdLength=%d",
+                                                 mCmd, mCmdLength));
                     }
-                    mTty.putString(chars, wattrs, 0, cbuff.position());
-                    cbuff.clear();
-                    mTty.redraw();
+                    catch (IndexOutOfBoundsException ex)
+                    {
+                    }
                 }
             } while (!Thread.interrupted() && (count > -1));
         }
@@ -92,6 +200,36 @@ public abstract class Transport implements Runnable
         }
     }
 
+    protected void decodeStringData(int count)
+    {
+        int length;
+
+        CoderResult result = mDecoder.decode(mBBuff, mCBuff, false);
+        if (result.isUnderflow() &&
+            (mBBuff.limit() == mBBuff.capacity()))
+        {
+            mBBuff.compact();
+            mBBuff.limit(mBBuff.position());
+            mBBuff.position(0);
+        }
+        length = mCBuff.position();
+        mTty.getTextWidths(mChars, length, mWidths);
+        for (int i = 0; i < length; ++i)
+        {
+            if ((int)mWidths[i] != mCWidth)
+            {
+                mWAttrs[i] = (byte)1;
+            }
+            else
+            {
+                mWAttrs[i] = (byte)0;
+            }
+        }
+        mTty.putString(mChars, mWAttrs, 0, mCBuff.position());
+        mCBuff.clear();
+        mTty.redraw();
+    }
+    
     public void start()
     {
         mThread = new Thread(this);
@@ -111,5 +249,5 @@ public abstract class Transport implements Runnable
     public abstract void write(byte[] buffer) throws IOException;
     public abstract void write(int c) throws IOException;
     public abstract void flush() throws IOException;
-	public abstract void close();
+    public abstract void close();
 }

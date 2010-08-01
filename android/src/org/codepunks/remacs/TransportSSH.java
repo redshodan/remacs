@@ -41,6 +41,7 @@ public class TransportSSH
 
     @Override public void connect()
     {
+        Log.d(TAG, "Connecting...");
         try
         {
             mConn = new Connection(mCfg.host, mCfg.getPort());
@@ -49,10 +50,10 @@ public class TransportSSH
             mConn.authenticateWithPassword(mCfg.user, mCfg.pass);
 
             mSess = mConn.openSession();
-			//mSess.execCommand("uname -a && date && uptime && who");
-            mSess.requestPTY(mCfg.term, mCfg.term_width, mCfg.term_height, 0, 0,
-                             null);
-            mSess.startShell();
+			mSess.execCommand("remacs --server");
+            // mSess.requestPTY(mCfg.term, mCfg.term_width, mCfg.term_height, 0, 0,
+            //                  null);
+            // mSess.startShell();
             mStdout = new StreamGobbler(mSess.getStdout());
             mStdin = mSess.getStdin();
             mConnected = true;

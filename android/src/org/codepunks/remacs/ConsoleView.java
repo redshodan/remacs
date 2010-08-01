@@ -58,7 +58,7 @@ public class ConsoleView extends View
         setOnKeyListener(mTty);
         mTransport = new TransportSSH(mTty, mCfg);
         mTty.setTransport(mTransport);
-        mTransport.start();
+        // mTransport.start();
 
         setFocusable(true);
         setFocusableInTouchMode(true);
@@ -359,7 +359,9 @@ public class ConsoleView extends View
                                    Matrix.ScaleToFit.FILL);
         
         mFullRedraw = true;
-	}
+
+        mTransport.start();
+    }
 
     public void vibrate()
     {
