@@ -70,7 +70,7 @@ public class TransportSSH
     {
         int count = mStdout.read(buffer, offset, length);
         
-        if (count < 0)
+        if (count <= 0)
         {
             stop();
         }

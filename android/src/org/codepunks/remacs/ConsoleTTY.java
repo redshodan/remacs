@@ -222,13 +222,13 @@ public class ConsoleTTY implements VDUDisplay, OnKeyListener
                 modPress(MOD_ALT_ON);
                 return true;
             case KeyEvent.KEYCODE_ALT_RIGHT:
-                mTransport.write(0x9); // TAB
+                mTransport.sendData(0x9); // TAB
                 return true;
             case KeyEvent.KEYCODE_SHIFT_LEFT:
                 modPress(MOD_SHIFT_ON);
                 return true;
             case KeyEvent.KEYCODE_SHIFT_RIGHT:
-                mTransport.write('/');
+                mTransport.sendData("/");
                 return true;
             case KeyEvent.KEYCODE_1:
             case KeyEvent.KEYCODE_2:
@@ -283,19 +283,20 @@ public class ConsoleTTY implements VDUDisplay, OnKeyListener
                                 
                 if (modchar < 0x80)
                 {
-                    mTransport.write(modchar);
+                    mTransport.sendData(modchar);
                 }
                 else
                 {
-                    mTransport.write(new String(Character.toChars(modchar))
-                                     .getBytes(mCfg.charset));
+                    mTransport.sendData(new String(Character.toChars(modchar))
+                                        .getBytes(mCfg.charset));
                 }
                 return true;
             }
             else if ((keycode == KeyEvent.KEYCODE_UNKNOWN) &&
                      (event.getAction() == KeyEvent.ACTION_MULTIPLE))
             {
-                mTransport.write(event.getCharacters().getBytes(mCfg.charset));
+                mTransport.sendData(
+                    event.getCharacters().getBytes(mCfg.charset));
                 return true;
             }
         }

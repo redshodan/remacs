@@ -19,31 +19,17 @@ public class ConsoleBuffer extends vt320
         
     @Override public void write(byte[] b)
     {
-        try
+        if ((b != null) && (mTransport != null))
         {
-            if ((b != null) && (mTransport != null))
-            {
-                mTransport.write(b);
-            }
-        }
-        catch (IOException e)
-        {
-            Log.e(TAG, "Fail", e);
+            mTransport.sendData(b);
         }
     }
         
     @Override public void write(int b)
     {
-        try
+        if (mTransport != null)
         {
-            if (mTransport != null)
-            {
-                mTransport.write(b);
-            }
-        }
-        catch (IOException e)
-        {
-            Log.e(TAG, "Fail", e);
+            mTransport.sendData(b);
         }
     }
         

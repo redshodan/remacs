@@ -42,6 +42,7 @@ public abstract class Transport implements Runnable
     // Remacs Protocol handling
     protected long mCmd = CMD_NONE;
     protected long mCmdLength = 0;
+    protected byte[] mCharBuff = new byte[1];
     
     public Transport(ConsoleTTY tty, ConnectionCfg cfg, int default_port)
     {
@@ -126,7 +127,7 @@ public abstract class Transport implements Runnable
         if (initial)
         {
             data = String.format("term=%s;row=%d;col=%d", mCfg.term,
-                                 mCfg.term_width, mCfg.term_height);
+                                 mCfg.term_height, mCfg.term_width);
         }
         else
         {
@@ -134,6 +135,22 @@ public abstract class Transport implements Runnable
                                  mCfg.term_height);
         }
         sendCmd(CMD_TTY, data);
+    }
+
+    public void sendData(String data)
+    {
+        sendCmd(CMD_DATA, data);
+    }
+    
+    public void sendData(byte[] data)
+    {
+        sendCmd(CMD_DATA, data);
+    }
+
+    public void sendData(int data)
+    {
+        mCharBuff[0] = (byte)(data & 0xFF);
+        sendCmd(CMD_DATA, mCharBuff);
     }
     
     public void run()
@@ -175,18 +192,28 @@ public abstract class Transport implements Runnable
                                 mCmdLength = (mCmd & 0xFF) >> 3;
                             }
                             mCmd = mCmd & CMD_CMDS;
+                            Log.d(TAG,
+                                  String.format("Decoded mCmd=%d mCmdLength=%d",
+                                                mCmd, mCmdLength));
                         }
                         int blen = mBBuff.remaining();
                         if (blen < mCmdLength)
                         {
+                            Log.d(TAG,
+                                  String.format(
+                                      "need more: blen=%d mCmdLength=%d",
+                                      blen, mCmdLength));
                             continue;
+                        }
+                        else if (mCmd == CMD_DATA)
+                        {
+                            decodeStringData(blen);
+                            mCmd = CMD_NONE;
                         }
                         else
                         {
-                            decodeStringData(blen);
+                            mCmd = CMD_NONE;
                         }
-                        Log.d(TAG, String.format("Decoded mCmd=%d mCmdLength=%d",
-                                                 mCmd, mCmdLength));
                     }
                     catch (IndexOutOfBoundsException ex)
                     {

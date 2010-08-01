@@ -2,4 +2,5 @@
 
 rm log-* -f
 export PATH=.:$PATH
-exec emacs -nw -q remacs.el --eval "(progn (fset 'yes-or-no-p 'y-or-n-p)(eval-buffer (get-buffer \"remacs.el\"))(remacs-test))"
+# exec emacs -nw -q remacs.el --eval "(progn (fset 'yes-or-no-p 'y-or-n-p)(eval-buffer (get-buffer \"remacs.el\"))(remacs-test))"
+exec emacs -nw -q --eval "(progn (fset 'yes-or-no-p 'y-or-n-p)(find-file-noselect \"remacs.el\" t)(eval-buffer (get-buffer \"remacs.el\"))(remacs-test))"
