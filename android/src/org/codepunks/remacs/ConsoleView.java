@@ -137,6 +137,11 @@ public class ConsoleView extends View
         mCanvas.drawPaint(mPaint);
 
         Integer[] colors = mTty.getColors();
+
+        if (redraw)
+        {
+            mCanvas.drawColor(colors[Colors.DEFAULT_BG_COLOR]);
+        }
         
         for (int l = 0; l < buffer.height; ++l)
         {
