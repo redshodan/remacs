@@ -13,6 +13,7 @@ import android.graphics.Typeface;
 import android.graphics.Bitmap.Config;
 import android.graphics.Paint.FontMetrics;
 import android.os.Vibrator;
+import android.os.Debug;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.View;
@@ -85,24 +86,27 @@ public class ConsoleView extends View
 		 * transform to our character width and height
 		 */
 		mShiftCursor = new Path();
-		mShiftCursor.lineTo(0.5f, 0.33f);
-		mShiftCursor.lineTo(1.0f, 0.0f);
+		mShiftCursor.moveTo(0.0f, 1.0f);
+		mShiftCursor.lineTo(0.5f, 0.66f);
+		mShiftCursor.lineTo(1.0f, 1.0f);
 
-		mAltCursor = new Path();
-		mAltCursor.moveTo(0.0f, 1.0f);
-		mAltCursor.lineTo(0.5f, 0.66f);
-		mAltCursor.lineTo(1.0f, 1.0f);
+        mAltCursor = new Path();
+		mAltCursor.moveTo(1.0f, 0.25f);
+		mAltCursor.lineTo(.33f, 0.50f);
+		mAltCursor.lineTo(1.0f, 0.75f);
 
 		mCtrlCursor = new Path();
-		mCtrlCursor.moveTo(0.0f, 0.25f);
-		mCtrlCursor.lineTo(1.0f, 0.5f);
-		mCtrlCursor.lineTo(0.0f, 0.75f);
+        mCtrlCursor.moveTo(0.0f, 0.33f);
+		mCtrlCursor.lineTo(0.5f, 0.0f);
+		mCtrlCursor.lineTo(1.0f, 0.33f);
 
 		// For creating the transform when the terminal resizes
 		mScaleSrc = new RectF();
 		mScaleSrc.set(0.0f, 0.0f, 1.0f, 1.0f);
 		mScaleDst = new RectF();
 		mScaleMatrix = new Matrix();
+
+        // Debug.startMethodTracing("remacs");
     }
 
     public void putString(String str)

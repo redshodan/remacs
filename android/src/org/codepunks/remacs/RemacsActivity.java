@@ -2,6 +2,7 @@ package org.codepunks.remacs;
 
 import android.app.Activity;
 import android.os.Bundle;
+import android.os.Debug;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -65,6 +66,7 @@ public class RemacsActivity extends Activity
 
     @Override public void finish()
     {
+        Debug.stopMethodTracing();
         Log.d(TAG, "RemacsActivity.finish()");
         mView.finish();
         super.finish();

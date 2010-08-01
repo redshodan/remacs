@@ -163,11 +163,11 @@ public class ConsoleTTY implements VDUDisplay, OnKeyListener
         }
         modchar = event.getUnicodeChar(mods);
         
-        Log.d(TAG, String.format(
-                  "onKey: %s: %d/%d prints=%d %d='%c'/%d='%c' mods=%d/%d",
-                  event.toString(), keycode, event.getKeyCode(),
-                  (event.isPrintingKey() ? 1 : 0),
-                  keychar, keychar, modchar, modchar, mModifiers, mods));
+        // Log.d(TAG, String.format(
+        //           "onKey: %s: %d/%d prints=%d %d='%c'/%d='%c' mods=%d/%d",
+        //           event.toString(), keycode, event.getKeyCode(),
+        //           (event.isPrintingKey() ? 1 : 0),
+        //           keychar, keychar, modchar, modchar, mModifiers, mods));
         
         // Ignore all up events
         if (event.getAction() == KeyEvent.ACTION_UP)
@@ -186,7 +186,6 @@ public class ConsoleTTY implements VDUDisplay, OnKeyListener
                 mModifiers &= ~MOD_TRANSIENT_MASK;
                 return true;
             case KeyEvent.KEYCODE_ENTER:
-                Log.d(TAG, "enter");
                 mBuffer.keyTyped(vt320.KEY_ENTER, ' ', 0);
                 mModifiers &= ~MOD_TRANSIENT_MASK;
                 return true;
@@ -217,15 +216,16 @@ public class ConsoleTTY implements VDUDisplay, OnKeyListener
                 {
                     mModifiers |= MOD_CTRL_ON;
                 }
+                redraw();
                 return true;
             case KeyEvent.KEYCODE_ALT_LEFT:
-                metaPress(MOD_ALT_ON);
+                modPress(MOD_ALT_ON);
                 return true;
             case KeyEvent.KEYCODE_ALT_RIGHT:
                 mTransport.write(0x9); // TAB
                 return true;
             case KeyEvent.KEYCODE_SHIFT_LEFT:
-                metaPress(MOD_SHIFT_ON);
+                modPress(MOD_SHIFT_ON);
                 return true;
             case KeyEvent.KEYCODE_SHIFT_RIGHT:
                 mTransport.write('/');
@@ -317,7 +317,7 @@ public class ConsoleTTY implements VDUDisplay, OnKeyListener
 	 *
 	 * @param code
 	 */
-	private void metaPress(int code)
+	private void modPress(int code)
     {
 		if ((mModifiers & (code << 1)) != 0)
         {
@@ -332,6 +332,7 @@ public class ConsoleTTY implements VDUDisplay, OnKeyListener
         {
 			mModifiers |= code;
         }
+        redraw();
 	}
 
     /*
