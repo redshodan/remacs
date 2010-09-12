@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+
+  <EditTextPreference
+     android:key="hostname"
+     android:title="@string/pref_hostname_title"
+     android:summary="@string/pref_hostname_summary"
+     android:defaultValue="@string/pref_hostname_def"
+     />
+
+  <EditTextPreference
+     android:key="port"
+     android:title="@string/pref_port_title"
+     android:summary="@string/pref_port_summary"
+     android:defaultValue="@string/pref_port_def"
+     android:numeric="integer"
+     />
+
+  <EditTextPreference
+     android:key="username"
+     android:title="@string/pref_username_title"
+     android:summary="@string/pref_username_summary"
+     android:defaultValue="@string/pref_username_def"
+     />
+
+  <EditTextPreference
+     android:key="password"
+     android:title="@string/pref_password_title"
+     android:summary="@string/pref_password_summary"
+     android:defaultValue="@string/pref_password_def"
+     />
+
+  <EditTextPreference
+     android:key="encoding"
+     android:title="@string/pref_encoding_title"
+     android:summary="@string/pref_encoding_summary"
+     android:defaultValue="@string/pref_encoding_def"
+     />
+
+  <EditTextPreference
+     android:key="term"
+     android:title="@string/pref_term_title"
+     android:summary="@string/pref_term_summary"
+     android:defaultValue="@string/pref_term_def"
+     />
+  
+</PreferenceScreen>

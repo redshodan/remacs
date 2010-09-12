@@ -4,9 +4,9 @@ import android.util.Log;
 
 public class ConnectionCfg
 {
+    public RemacsCfg cfg;
     public String host;
     public int port;
-    public int default_port;
     public String user;
     public String pass;
     public String charset;
@@ -15,8 +15,8 @@ public class ConnectionCfg
     public int term_width;
     public int term_height;
 
-    public ConnectionCfg(String host, int port, String user, String pass,
-                         String charset, String term)
+    public void set(String host, int port, String user, String pass,
+                    String charset, String term, int term_scrollback)
     {
         this.host = host;
         this.port = port;
@@ -24,7 +24,7 @@ public class ConnectionCfg
         this.pass = pass;
         this.charset = charset;
         this.term = term;
-        term_scrollback = 0;
+        this.term_scrollback = term_scrollback;
         term_width = 0;
         term_height = 0;
     }
@@ -33,7 +33,7 @@ public class ConnectionCfg
     {
         if (port == 0)
         {
-            return default_port;
+            return cfg.def_port;
         }
         else
         {

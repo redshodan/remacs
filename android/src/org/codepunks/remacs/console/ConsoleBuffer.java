@@ -1,4 +1,4 @@
-package org.codepunks.remacs;
+package org.codepunks.remacs.console;
 
 
 import android.util.Log;
@@ -9,6 +9,8 @@ import de.mud.terminal.VDUInput;
 import de.mud.terminal.vt320;
 
 import java.io.IOException;
+
+import org.codepunks.remacs.transport.Transport;
 
 
 public class ConsoleBuffer extends vt320

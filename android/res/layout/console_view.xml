@@ -5,11 +5,11 @@
                 android:layout_height="fill_parent"
 	            android:background="#ff000000">
 
-  <org.codepunks.remacs.ConsoleView android:id="@+id/console"
+  <org.codepunks.remacs.console.ConsoleView android:id="@+id/console"
                 android:layout_width="fill_parent" 
                 android:layout_height="fill_parent">
     <requestFocus />
-  </org.codepunks.remacs.ConsoleView>
+  </org.codepunks.remacs.console.ConsoleView>
 
 </RelativeLayout>
 

@@ -2,5 +2,36 @@
 <resources>
     <string name="remacs_app">Remacs</string>
     <string name="quit">Quit</string>
+    <string name="menu_settings">Settings</string>
+
+    <!-- Preference values -->
+    <string name="pref_hostname_title">Hostname</string>
+    <string name="pref_hostname_summary">Hostname to connect to</string>
+    <string name="pref_hostname_def">10.0.2.2</string>
+
+    <string name="pref_port_title">Port</string>
+    <string name="pref_port_summary">Port to connect to</string>
+    <string name="pref_port_def">22</string>
+
+    <string name="pref_username_title">Username</string>
+    <string name="pref_username_summary">Username to login as</string>
+    <string name="pref_username_def">remacs</string>
+
+    <string name="pref_password_title">Password</string>
+    <string name="pref_password_summary">Password to login with</string>
+    <string name="pref_password_def">remacs</string>
+
+    <string name="pref_encoding_title">Character Encoding</string>
+    <string name="pref_encoding_summary">Character encoding to use</string>
+    <string name="pref_encoding_def">UTF-8</string>
+
+    <string name="pref_term_title">Terminal Type</string>
+    <string name="pref_term_summary">Terminal type to use</string>
+    <string name="pref_term_def">screen</string>
+
+    <string name="pref_term_scrollback_title">Scrollback</string>
+    <string name="pref_term_scrollback_summary">Amount of scrollback to keep</string>
+    <string name="pref_term_scrollback_def">100</string>
+
 </resources>
 

@@ -1,4 +1,4 @@
-package org.codepunks.remacs;
+package org.codepunks.remacs.transport;
 
 import android.util.Log;
 import java.io.IOException;
@@ -9,6 +9,11 @@ import java.nio.charset.Charset;
 import java.nio.charset.CharsetDecoder;
 import java.nio.charset.CoderResult;
 import java.nio.charset.CodingErrorAction;
+
+import org.codepunks.remacs.ConnectionCfg;
+import org.codepunks.remacs.RemacsCfg;
+import org.codepunks.remacs.console.ConsoleTTY;
+
 
 public abstract class Transport implements Runnable
 {
@@ -44,11 +49,11 @@ public abstract class Transport implements Runnable
     protected long mCmdLength = 0;
     protected byte[] mCharBuff = new byte[1];
     
-    public Transport(ConsoleTTY tty, ConnectionCfg cfg, int default_port)
+    public Transport(ConsoleTTY tty, ConnectionCfg cfg, int def_port)
     {
         mTty = tty;
         mCfg = cfg;
-        mCfg.default_port = default_port;
+        //mCfg.def_port = def_port;
         Charset cs = Charset.forName(mCfg.charset);
         mDecoder = cs.newDecoder();
         mDecoder.onUnmappableCharacter(CodingErrorAction.REPLACE);

@@ -1,4 +1,4 @@
-package org.codepunks.remacs;
+package org.codepunks.remacs.transport;
 
 import android.util.Log;
 
@@ -12,6 +12,10 @@ import ch.ethz.ssh2.ConnectionMonitor;
 import ch.ethz.ssh2.InteractiveCallback;
 import ch.ethz.ssh2.Session;
 import ch.ethz.ssh2.StreamGobbler;
+
+import org.codepunks.remacs.ConnectionCfg;
+import org.codepunks.remacs.RemacsCfg;
+import org.codepunks.remacs.console.ConsoleTTY;
 
 
 public class TransportSSH

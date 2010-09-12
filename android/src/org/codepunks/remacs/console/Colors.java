@@ -1,4 +1,4 @@
-package org.codepunks.remacs;
+package org.codepunks.remacs.console;
 
 
 public class Colors

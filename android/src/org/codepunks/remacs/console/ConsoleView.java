@@ -1,4 +1,4 @@
-package org.codepunks.remacs;
+package org.codepunks.remacs.console;
 
 import android.content.Context;
 import android.graphics.Bitmap;
@@ -21,12 +21,18 @@ import android.view.View.OnKeyListener;
 
 import de.mud.terminal.VDUBuffer;
 
+import org.codepunks.remacs.ConnectionCfg;
+import org.codepunks.remacs.RemacsCfg;
+import org.codepunks.remacs.transport.Transport;
+import org.codepunks.remacs.transport.TransportSSH;
+
 
 public class ConsoleView extends View
 {
     protected static final String TAG = "Remacs";
 	public static final long VIBRATE_DURATION = 30;
 
+    protected RemacsCfg mRcfg;
     protected ConsoleTTY mTty;
     protected Transport mTransport;
     protected ConnectionCfg mCfg;
@@ -49,17 +55,6 @@ public class ConsoleView extends View
     {
         super(context, attrs);
 
-        // mCfg = new ConnectionCfg("10.0.2.2", 22, "remacs", "remacs", "UTF-8",
-        //                          "screen");
-        mCfg = new ConnectionCfg("10.1.1.20", 22, "remacs", "remacs", "UTF-8",
-                                 "screen");
-        mCfg.term_scrollback = 100;
-        mTty = new ConsoleTTY(this, mCfg);
-        setOnKeyListener(mTty);
-        mTransport = new TransportSSH(mTty, mCfg);
-        mTty.setTransport(mTransport);
-        // mTransport.start();
-
         setFocusable(true);
         setFocusableInTouchMode(true);
         
@@ -72,9 +67,6 @@ public class ConsoleView extends View
 		mPaint.setFakeBoldText(true);
 
         mCursorPaint = new Paint();
-		mCursorPaint.setColor(mTty.getColors()[Colors.WHITE]);
-		mCursorPaint.setXfermode(
-            new PixelXorXfermode(mTty.getColors()[Colors.DEFAULT_BG_COLOR]));
 		mCursorPaint.setAntiAlias(true);
 
 		mCursorStrokePaint = new Paint(mCursorPaint);
@@ -105,8 +97,21 @@ public class ConsoleView extends View
 		mScaleSrc.set(0.0f, 0.0f, 1.0f, 1.0f);
 		mScaleDst = new RectF();
 		mScaleMatrix = new Matrix();
+    }
 
-        // Debug.startMethodTracing("remacs");
+    public void setup(RemacsCfg rcfg, ConnectionCfg cfg)
+    {
+        mRcfg = rcfg;
+        mCfg = cfg;
+        mTty = new ConsoleTTY(this, mCfg);
+        setOnKeyListener(mTty);
+        mTransport = new TransportSSH(mTty, mCfg);
+        mTty.setTransport(mTransport);
+        // mTransport.start();
+
+        mCursorPaint.setColor(mTty.getColors()[Colors.WHITE]);
+		mCursorPaint.setXfermode(
+            new PixelXorXfermode(mTty.getColors()[Colors.DEFAULT_BG_COLOR]));
     }
 
     public void putString(String str)
@@ -324,7 +329,7 @@ public class ConsoleView extends View
     {
 		super.onSizeChanged(w, h, oldw, oldh);
 
-        Log.d(TAG, "ConsoleTTY.Buffer.onSizeChanged");
+        Log.d(TAG, "ConsoleView.onSizeChanged");
 
         int width = getWidth();
         int height = getHeight();
