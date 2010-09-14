@@ -26,6 +26,7 @@ public class RemacsActivity extends Activity
     
     public RemacsActivity()
     {
+        super();
         Log.d(TAG, "RemacsActivity.()");
     }
 
