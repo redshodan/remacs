@@ -104,25 +104,34 @@ public class RemacsActivity extends Activity
         SharedPreferences sp =
             PreferenceManager.getDefaultSharedPreferences(getBaseContext());
 
-        mCfg = new ConnectionCfg();
-        mCfg.set("10.0.2.2", 22, "remacs", "remacs", "UTF-8", "screen", 100);
+        String host = "10.0.2.2";
+        int port = 22;
+        String user = "remacs";
+        String pass = "remacs";
+        String encoding = "UTF-8";
+        String term = "screen";
+        int scrollback = 100;
 
         try
         {
-            // mKeyboardName = sp.getString("keyboard", DEF_KEYBOARD_NAME);
-            // mLongPressEnabled = sp.getBoolean("longpress", true);
-            // mTouchSlop = Integer.parseInt(sp.getString("touchSlop", "10"));
-            // mDoubleTapSlop =
-            //     Integer.parseInt(sp.getString("doubleTapSlop", "100"));
-            // mMinFlingVelocity =
-            //     Integer.parseInt(sp.getString("minFlingVelocity", "5"));
+            host = sp.getString("hostname", "10.0.2.2");
+            port = Integer.parseInt(sp.getString("port", "22"));
+            user = sp.getString("username", "remacs");
+            pass = sp.getString("password", "remacs");
+            encoding = sp.getString("encoding", "UTF-8");
+            term = sp.getString("term", "screen");
         }
         catch (ClassCastException e)
         {
             Log.d(TAG, "loadPrefs: failed");
             defaultPrefs();
         }
-        // Log.d(TAG, String.format("config: ts=%d dts=%d mfs=%d lp=%d", mTouchSlop,
-        //                          mDoubleTapSlop, mMinFlingVelocity, ilp));
+
+        mCfg = new ConnectionCfg();
+        mCfg.set(host, port, user, pass, encoding, term, scrollback);
+
+        Log.d(TAG, String.format("config: host=%s port=%d user=%s pass=XXX " +
+                                 "encoding=%s term=%s scroll=%d",
+                                 host, port, user, encoding, term, scrollback));
     }
 }
