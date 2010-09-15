@@ -107,7 +107,7 @@ public class ConsoleView extends View
         setOnKeyListener(mTty);
         mTransport = new TransportSSH(mTty, mCfg);
         mTty.setTransport(mTransport);
-        // mTransport.start();
+        mTransport.start();
 
         mCursorPaint.setColor(mTty.getColors()[Colors.WHITE]);
 		mCursorPaint.setXfermode(
@@ -364,8 +364,6 @@ public class ConsoleView extends View
                                    Matrix.ScaleToFit.FILL);
         
         mFullRedraw = true;
-
-        mTransport.start();
     }
 
     public void vibrate()
