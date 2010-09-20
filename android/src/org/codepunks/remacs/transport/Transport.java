@@ -24,13 +24,15 @@ public abstract class Transport implements Runnable
     //  - least significant 3 bits are command.
     //  - middle 4 bits are size of data.
     //  - most significant bit indicates size is number of size bytes.
-    public final int CMD_NONE = -1;
-    public final int CMD_DATA = 0;
-    public final int CMD_TTY = 1;
-    public final int CMD_MAX = 7;
-    public final int CMD_CMDS = 1 | 2 | 4;
-    public final int CMD_SIZE_MAX = 15;
-    public final int CMD_SIZE_MAXED = 128;
+    public final long CMD_NONE = -1;
+    public final long CMD_DATA = 0;
+    public final long CMD_TTY = 1;
+    public final long CMD_NOTIFY = 2;
+    public final long CMD_MAX = 7;
+    public final long CMD_CMDS = 1 | 2 | 4;
+    public final long CMD_SIZE_MAX = 15;
+    public final long CMD_SIZE_MAXED = 128;
+    public final long CMD_SIZE_MAXED_BIG = 256;
 
     protected ConsoleTTY mTty;
     protected ConnectionCfg mCfg;
@@ -187,14 +189,16 @@ public abstract class Transport implements Runnable
                         if (mCmd == CMD_NONE)
                         {
                             mCmd = mBBuff.get();
+                            mCmd = (mCmd & 0xFF);
                             Log.d(TAG, String.format("unpacked cmd=%d", mCmd));
-                            if ((mCmd & CMD_SIZE_MAXED) != 0)
+                            if ((mCmd & CMD_SIZE_MAXED_BIG) != 0)
                             {
+                                Log.d(TAG, "size maxed, getting next byte");
                                 mCmdLength = mBBuff.getInt();
                             }
                             else
                             {
-                                mCmdLength = (mCmd & 0xFF) >> 3;
+                                mCmdLength = mCmd >> 3;
                             }
                             mCmd = mCmd & CMD_CMDS;
                             Log.d(TAG,
@@ -210,13 +214,9 @@ public abstract class Transport implements Runnable
                                       blen, mCmdLength));
                             continue;
                         }
-                        else if (mCmd == CMD_DATA)
+                        else 
                         {
                             decodeStringData(blen);
-                            mCmd = CMD_NONE;
-                        }
-                        else
-                        {
                             mCmd = CMD_NONE;
                         }
                     }
@@ -245,19 +245,28 @@ public abstract class Transport implements Runnable
             mBBuff.position(0);
         }
         length = mCBuff.position();
-        mTty.getTextWidths(mChars, length, mWidths);
-        for (int i = 0; i < length; ++i)
+
+        if (mCmd == CMD_DATA)
         {
-            if ((int)mWidths[i] != mCWidth)
+            mTty.getTextWidths(mChars, length, mWidths);
+            for (int i = 0; i < length; ++i)
             {
-                mWAttrs[i] = (byte)1;
+                if ((int)mWidths[i] != mCWidth)
+                {
+                    mWAttrs[i] = (byte)1;
+                }
+                else
+                {
+                    mWAttrs[i] = (byte)0;
+                }
             }
-            else
-            {
-                mWAttrs[i] = (byte)0;
-            }
+            mTty.putString(mChars, mWAttrs, 0, mCBuff.position());
         }
-        mTty.putString(mChars, mWAttrs, 0, mCBuff.position());
+        else if (mCmd == CMD_NOTIFY)
+        {
+            Log.d(TAG, String.format("notify: %s", mChars));
+        }
+        
         mCBuff.clear();
         mTty.redraw();
     }

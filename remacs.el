@@ -490,7 +490,7 @@ remacs or call `M-x remacs-force-delete' to forcibly disconnect it.")
 
 (defun remacs-send-string (proc string)
   (remacs-log (concat "Sent " string) proc)
-  (process-send-string proc string))
+  (process-send-string proc (concat string "\n")))
 
 (defun remacs-unquote-arg (arg)
   (replace-regexp-in-string
@@ -535,3 +535,15 @@ remacs or call `M-x remacs-force-delete' to forcibly disconnect it.")
   (get-buffer-create remacs-buffer)
   (switch-to-buffer remacs-buffer)
 )
+
+(defun remacs-notify (title body &optional cb)
+  (let ((msg (format "-notify %s %s" (remacs-quote-arg title)
+                     (remacs-quote-arg body))))
+    (remacs-log msg)
+    (dolist (proc remacs-clients)
+      (remacs-send-string proc msg))))
+
+(defun remacs-notify-test ()
+  (interactive)
+  (remacs-notify "1 title" "1 body")
+  (remacs-notify "2 title" "2 body"))

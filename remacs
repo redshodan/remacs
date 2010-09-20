@@ -32,6 +32,7 @@ from optparse import OptionParser
 CMD_NONE = -1
 CMD_DATA = 0
 CMD_TTY = 1
+CMD_NOTIFY = 2
 CMD_MAX = 7
 CMD_CMDS = 1 | 2 | 4
 CMD_SIZE_MAX = 15
@@ -108,6 +109,7 @@ class PipeBuff(object):
             log("length=%d" % length)
             if length <= CMD_SIZE_MAX + 1:
                 cmd = cmd + (length << 3)
+                log("cmd: %d" % cmd)
                 output = struct.pack("B", cmd) + data
             else:
                 cmd = cmd + CMD_SIZE_MAXED
@@ -455,12 +457,23 @@ class Server(object):
                 ret.append(c)
         return "".join(ret)
 
+    def unescape(self, str):
+        return str.replace("&&", "&").replace("&-", "-").replace("&n", "\n")
+    
     def sendToEmacs(self, cmd, *args):
         out = []
         for arg in args:
             out.append(self.escape(arg.strip()))
         log("sendToEmacs:-%s %s\n" % (cmd, " ".join(out)))
         os.write(self.pipe, "-%s %s\n" % (cmd, " ".join(out)))
+
+    def receivedFromEmacs(self, buff):
+        log("Received from emacs: %s" % buff)
+        words = buff.split(" ")
+        if words[0] == "-notify":
+            self.mgr.sendCmd(CMD_NOTIFY, words[1] + " " + words[2])
+        else:
+            log("Invalid command from emacs")
 
     def pipe_cb(self, fd):
         log("pipe_cb")
@@ -475,8 +488,11 @@ class Server(object):
             else:
                 log("pipe_cb: EXCEPT: %s" % e)
                 raise
-        log("Got from emacs: %s" % buff)
-        if not buff:
+        if buff:
+            for line in buff.split("\n"):
+                if line and len(line):
+                    self.receivedFromEmacs(line)
+        else:
             raise Exception("Lost connection to emacs")
         
     def cmd_cb(self, cmd, data):
