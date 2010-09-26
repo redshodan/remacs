@@ -545,5 +545,5 @@ remacs or call `M-x remacs-force-delete' to forcibly disconnect it.")
 
 (defun remacs-notify-test ()
   (interactive)
-  (remacs-notify "1 title" "1 body")
+  (remacs-notify "1 title" "1 bod")
   (remacs-notify "2 title" "2 body"))

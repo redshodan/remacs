@@ -32,7 +32,6 @@ public abstract class Transport implements Runnable
     public final long CMD_CMDS = 1 | 2 | 4;
     public final long CMD_SIZE_MAX = 15;
     public final long CMD_SIZE_MAXED = 128;
-    public final long CMD_SIZE_MAXED_BIG = 256;
 
     protected ConsoleTTY mTty;
     protected ConnectionCfg mCfg;
@@ -191,7 +190,7 @@ public abstract class Transport implements Runnable
                             mCmd = mBBuff.get();
                             mCmd = (mCmd & 0xFF);
                             Log.d(TAG, String.format("unpacked cmd=%d", mCmd));
-                            if ((mCmd & CMD_SIZE_MAXED_BIG) != 0)
+                            if ((mCmd & CMD_SIZE_MAXED) != 0)
                             {
                                 Log.d(TAG, "size maxed, getting next byte");
                                 mCmdLength = mBBuff.getInt();
@@ -234,7 +233,7 @@ public abstract class Transport implements Runnable
 
     protected void decodeStringData(int count)
     {
-        int length;
+        int length = (int)mCmdLength;
 
         CoderResult result = mDecoder.decode(mBBuff, mCBuff, false);
         if (result.isUnderflow() &&
@@ -244,10 +243,11 @@ public abstract class Transport implements Runnable
             mBBuff.limit(mBBuff.position());
             mBBuff.position(0);
         }
-        length = mCBuff.position();
 
         if (mCmd == CMD_DATA)
         {
+            Log.d(TAG, String.format("DATA: length=%d size=%d", length,
+                                     mCBuff.position()));
             mTty.getTextWidths(mChars, length, mWidths);
             for (int i = 0; i < length; ++i)
             {
@@ -260,11 +260,13 @@ public abstract class Transport implements Runnable
                     mWAttrs[i] = (byte)0;
                 }
             }
-            mTty.putString(mChars, mWAttrs, 0, mCBuff.position());
+            mTty.putString(mChars, mWAttrs, 0, length);
         }
         else if (mCmd == CMD_NOTIFY)
         {
-            Log.d(TAG, String.format("notify: %s", mChars));
+            Log.d(TAG, String.format("NOTIFY: %s",
+                                     new String(mChars, 0, length)));
+            mTty.putString(mChars, mWAttrs, 0, length);
         }
         
         mCBuff.clear();

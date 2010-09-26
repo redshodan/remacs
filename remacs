@@ -35,7 +35,7 @@ CMD_TTY = 1
 CMD_NOTIFY = 2
 CMD_MAX = 7
 CMD_CMDS = 1 | 2 | 4
-CMD_SIZE_MAX = 15
+CMD_SIZE_MAX = 16
 CMD_SIZE_MAXED = 128
 
 log_file = None
@@ -107,7 +107,7 @@ class PipeBuff(object):
         if data:
             length = len(data)
             log("length=%d" % length)
-            if length <= CMD_SIZE_MAX + 1:
+            if length < CMD_SIZE_MAX:
                 cmd = cmd + (length << 3)
                 log("cmd: %d" % cmd)
                 output = struct.pack("B", cmd) + data
