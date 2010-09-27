@@ -178,11 +178,21 @@ public abstract class Transport implements Runnable
             mBBuff.limit(0);
             do
             {
-                count = read(mBytes, mBBuff.arrayOffset() + mBBuff.limit(),
-                             mBBuff.capacity() - mBBuff.limit());
+                if ((mCmd == CMD_NONE) && (mBBuff.remaining() > 0))
+                {
+                    count = mBBuff.remaining();
+                }
+                else
+                {
+                    count = read(mBytes, mBBuff.arrayOffset() + mBBuff.limit(),
+                                 mBBuff.capacity() - mBBuff.limit());
+                    if (count > 0)
+                    {
+                        mBBuff.limit(mBBuff.limit() + count);
+                    }
+                }
                 if (count > 0)
                 {
-                    mBBuff.limit(mBBuff.limit() + count);
                     try
                     {
                         if (mCmd == CMD_NONE)
@@ -234,7 +244,15 @@ public abstract class Transport implements Runnable
     protected void decodeStringData(int count)
     {
         int length = (int)mCmdLength;
+        int oldlim = -1;
 
+        if (mBBuff.remaining() > length)
+        {
+            Log.d(TAG, "Extra data, limiting buffer");
+            oldlim = mBBuff.limit();
+            mBBuff.limit(mBBuff.position() + length);
+        }
+        
         CoderResult result = mDecoder.decode(mBBuff, mCBuff, false);
         if (result.isUnderflow() &&
             (mBBuff.limit() == mBBuff.capacity()))
@@ -244,10 +262,11 @@ public abstract class Transport implements Runnable
             mBBuff.position(0);
         }
 
+        Log.d(TAG, String.format("decodeStringData: length=%d size=%d", length,
+                                 mCBuff.position()));
         if (mCmd == CMD_DATA)
         {
-            Log.d(TAG, String.format("DATA: length=%d size=%d", length,
-                                     mCBuff.position()));
+            Log.d(TAG, "DATA");
             mTty.getTextWidths(mChars, length, mWidths);
             for (int i = 0; i < length; ++i)
             {
@@ -261,16 +280,21 @@ public abstract class Transport implements Runnable
                 }
             }
             mTty.putString(mChars, mWAttrs, 0, length);
+            mTty.redraw();
         }
         else if (mCmd == CMD_NOTIFY)
         {
-            Log.d(TAG, String.format("NOTIFY: %s",
-                                     new String(mChars, 0, length)));
-            mTty.putString(mChars, mWAttrs, 0, length);
+            String data = new String(mChars, 0, length);
+            Log.d(TAG, String.format("NOTIFY: %s", data));
+            String[] words = data.split(" ");
+            mTty.handleNotification(words[0], words[1]);
         }
         
         mCBuff.clear();
-        mTty.redraw();
+        if (oldlim > -1)
+        {
+            mBBuff.limit(oldlim);
+        }
     }
     
     public void start()

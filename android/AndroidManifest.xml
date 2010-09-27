@@ -3,13 +3,14 @@
     package="org.codepunks.remacs">
 
     <application android:label="@string/remacs_app">
-        <activity android:name="RemacsActivity">
+        <activity android:name=".RemacsActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
 		<activity android:name=".RemacsSettings" />
+        <service android:name=".RemacsService" />
     </application>
 
 	<uses-permission android:name="android.permission.INTERNET" />

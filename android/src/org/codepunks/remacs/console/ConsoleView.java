@@ -22,6 +22,7 @@ import android.view.View.OnKeyListener;
 import de.mud.terminal.VDUBuffer;
 
 import org.codepunks.remacs.ConnectionCfg;
+import org.codepunks.remacs.RemacsActivity;
 import org.codepunks.remacs.RemacsCfg;
 import org.codepunks.remacs.transport.Transport;
 import org.codepunks.remacs.transport.TransportSSH;
@@ -32,6 +33,7 @@ public class ConsoleView extends View
     protected static final String TAG = "Remacs";
 	public static final long VIBRATE_DURATION = 30;
 
+    protected RemacsActivity mAct;
     protected RemacsCfg mRcfg;
     protected ConsoleTTY mTty;
     protected Transport mTransport;
@@ -99,8 +101,9 @@ public class ConsoleView extends View
 		mScaleMatrix = new Matrix();
     }
 
-    public void setup(RemacsCfg rcfg, ConnectionCfg cfg)
+    public void setup(RemacsActivity act, RemacsCfg rcfg, ConnectionCfg cfg)
     {
+        mAct = act;
         mRcfg = rcfg;
         mCfg = cfg;
         mTty = new ConsoleTTY(this, mCfg);
@@ -375,5 +378,10 @@ public class ConsoleView extends View
     {
         Log.d(TAG, "ConsoleView.finish()");
         mTransport.stop();
+    }
+
+    public void handleNotification(String title, String body)
+    {
+        mAct.handleNotification(title, body);
     }
 }

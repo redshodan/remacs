@@ -412,20 +412,18 @@ class Server(object):
         self.started = False
         self.sock = None
         self.pipe = None
+        self.emacs_pid = None
     
     def run(self):
         try:
             self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
             self.sock.connect("/tmp/remacs%d/remacs" % os.geteuid())
-            # self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            # self.sock.connect(("localhost", 5050))
             log("connected to emacs server")
             self.sock.setblocking(0)
             log("sock fd=%d" % self.sock.fileno())
             self.pipe = self.sock.fileno()
             log("sock pipe fd: %d" % self.pipe)
             (self.tty, self.slave) = pty.openpty()
-            #self.tty = os.fdopen(self.tty, "w+")
             fcntl.ioctl(self.tty, termios.TIOCSWINSZ,
                         struct.pack("HHHH", 24, 80, 0, 0))
             self.mgr = TTYManager(sys.stdin.fileno(), sys.stdout.fileno(),
@@ -470,7 +468,10 @@ class Server(object):
     def receivedFromEmacs(self, buff):
         log("Received from emacs: %s" % buff)
         words = buff.split(" ")
-        if words[0] == "-notify":
+        if words[0] == "-emacs-pid":
+            self.emacs_pid = words[1]
+            log("Emacs PID=%s" % self.emacs_pid)
+        elif words[0] == "-notify":
             self.mgr.sendCmd(CMD_NOTIFY, words[1] + " " + words[2])
         else:
             log("Invalid command from emacs")

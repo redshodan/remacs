@@ -1,10 +1,14 @@
 package org.codepunks.remacs;
 
 import android.app.Activity;
+import android.content.ComponentName;
+import android.content.Context;
 import android.content.Intent;
+import android.content.ServiceConnection;
 import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.os.Debug;
+import android.os.IBinder;
 import android.preference.PreferenceManager;
 import android.util.Log;
 import android.view.Menu;
@@ -12,22 +16,42 @@ import android.view.MenuItem;
 import android.view.View;
 import android.widget.TextView;
 
+import org.codepunks.remacs.RemacsService;
 import org.codepunks.remacs.console.ConsoleView;
 
 
 public class RemacsActivity extends Activity
 {
     protected static final String TAG = "Remacs";
+
+    private class RemacsServiceConnection implements ServiceConnection
+    {
+        public void onServiceConnected(ComponentName className, IBinder service)
+        {
+            Log.d(TAG, "RemacsServiceConnection.onServiceConnected");
+            mService = ((RemacsService.RemacsBinder)service).getService();
+        }
+        
+        public void onServiceDisconnected(ComponentName className)
+        {
+            Log.d(TAG, "RemacsServiceConnection.onServiceDisconnected");
+            mService = null;
+        }
+    };
+
     protected static final int MENU_QUIT = Menu.FIRST;
 
     protected RemacsCfg mRcfg;
     protected ConnectionCfg mCfg;
     protected ConsoleView mView;
+    protected RemacsService mService;
+    protected ServiceConnection mServiceConnection;
+    protected boolean mIsBound = false;
     
     public RemacsActivity()
     {
         super();
-        Log.d(TAG, "RemacsActivity.()");
+        Log.d(TAG, "RemacsActivity()");
     }
 
     @Override public void onCreate(Bundle savedInstanceState)
@@ -36,6 +60,7 @@ public class RemacsActivity extends Activity
 
         Log.d(TAG, "RemacsActivity.onCreate");
 
+        mServiceConnection = new RemacsServiceConnection();
         setContentView(R.layout.console_view);
         mView = (ConsoleView) findViewById(R.id.console);
     }
@@ -44,7 +69,8 @@ public class RemacsActivity extends Activity
     {
         super.onStart();
         loadPrefs();
-        mView.setup(mRcfg, mCfg);
+        mView.setup(this, mRcfg, mCfg);
+        doBindService();
     }
         
     @Override protected void onResume()
@@ -92,6 +118,30 @@ public class RemacsActivity extends Activity
         super.finish();
     }
 
+    protected void doBindService()
+    {
+        Log.d(TAG, "RemacsActivity.doBindService");
+        bindService(new Intent(this, RemacsService.class),
+                    mServiceConnection, Context.BIND_AUTO_CREATE);
+        mIsBound = true;
+    }
+
+    protected void doUnbindService()
+    {
+        Log.d(TAG, "RemacsActivity.doUnbindService");
+        if (mServiceConnection != null)
+        {
+            unbindService(mServiceConnection);
+            mIsBound = false;
+        }
+    }
+
+    @Override protected void onDestroy()
+    {
+        super.onDestroy();
+        doUnbindService();
+    }
+
     protected void defaultPrefs()
     {
         mRcfg = new RemacsCfg();
@@ -133,5 +183,10 @@ public class RemacsActivity extends Activity
         Log.d(TAG, String.format("config: host=%s port=%d user=%s pass=XXX " +
                                  "encoding=%s term=%s scroll=%d",
                                  host, port, user, encoding, term, scrollback));
+    }
+
+    public void handleNotification(String title, String body)
+    {
+        mService.showNotification(title, body);
     }
 }
