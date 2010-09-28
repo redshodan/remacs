@@ -380,8 +380,8 @@ public class ConsoleView extends View
         mTransport.stop();
     }
 
-    public void handleNotification(String title, String body)
+    public void handleNotification(int id, String title, String body)
     {
-        mAct.handleNotification(title, body);
+        mAct.handleNotification(id, title, body);
     }
 }

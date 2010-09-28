@@ -10,6 +10,8 @@ import android.os.Binder;
 import android.os.IBinder;
 import android.util.Log;
 
+import java.util.HashMap;
+import java.util.Map;
 
 public class RemacsService extends Service
 {
@@ -23,9 +25,30 @@ public class RemacsService extends Service
         }
     }
 
-    private NotificationManager mNM;
-    private final IBinder mBinder = new RemacsBinder();
+    public class RemacsNotif
+    {
+        public RemacsNotif(int id, String title, String body)
+        {
+            this.id = id;
+            this.title = title;
+            this.body = body;
+        }
+        
+        public int id;
+        public String title;
+        public String body;
+    }
 
+    protected NotificationManager mNM;
+    protected final IBinder mBinder = new RemacsBinder();
+    protected Map mNotifMap;
+
+    public RemacsService()
+    {
+        super();
+        mNotifMap = new HashMap<Integer, RemacsNotif>();
+    }
+    
     @Override public void onCreate()
     {
         Log.d(TAG, "RemacsService.onCreate");
@@ -36,6 +59,7 @@ public class RemacsService extends Service
     {
         Log.d(TAG, "RemacsService.onStart: Received start id " +
               startId + ": " + intent);
+        handleNotification(1, "title", "body");
     }
 
     // Android 2.0
@@ -64,15 +88,21 @@ public class RemacsService extends Service
         return true;
     }
 
-    public void showNotification(String title, String body)
+    public void handleNotification(int id, String title, String body)
+    {
+        mNotifMap.put(id, new RemacsNotif(id, title, body));
+        showNotification(id, title, body);
+    }
+    
+    protected void showNotification(int id, String title, String body)
     {
         Notification notification =
-            new Notification(android.R.drawable.btn_star, title,
+            new Notification(R.drawable.emacs, title,
                              System.currentTimeMillis());
 
         Intent intent = new Intent(this, RemacsActivity.class);
         PendingIntent pending = PendingIntent.getActivity(this, 0, intent, 0);
         notification.setLatestEventInfo(this, title, body, pending);
-        mNM.notify(1, notification);
+        mNM.notify(id, notification);
     }
 }

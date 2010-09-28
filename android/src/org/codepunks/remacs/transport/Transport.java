@@ -287,7 +287,15 @@ public abstract class Transport implements Runnable
             String data = new String(mChars, 0, length);
             Log.d(TAG, String.format("NOTIFY: %s", data));
             String[] words = data.split(" ");
-            mTty.handleNotification(words[0], words[1]);
+            int id = -1;
+            try
+            {
+                id = Integer.parseInt(words[0]);
+            }
+            catch (Exception e)
+            {
+            }
+            mTty.handleNotification(id, words[1], words[2]);
         }
         
         mCBuff.clear();

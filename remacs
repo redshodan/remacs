@@ -472,7 +472,8 @@ class Server(object):
             self.emacs_pid = words[1]
             log("Emacs PID=%s" % self.emacs_pid)
         elif words[0] == "-notify":
-            self.mgr.sendCmd(CMD_NOTIFY, words[1] + " " + words[2])
+            self.mgr.sendCmd(CMD_NOTIFY, words[1] + " " + words[2] + " " +
+                             words[3])
         else:
             log("Invalid command from emacs")
 

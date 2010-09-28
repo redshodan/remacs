@@ -23,6 +23,31 @@
 ;;; Based on server.el.
 ;;;
 
+;;
+;; Protocol:
+;;
+;; Sent:
+;;   -emacs-pid 12345
+;;   -error string
+;;   -notify id title body
+;;   -suspend
+;;
+;; Received:
+;;   -version
+;;   -resume
+;;   -supend
+;;   -ignore
+;;   -tty
+;;   -position
+;;   -file
+;;   -eval
+;;   -env
+;;   -dir
+;;   -msg
+;;   -notify-invoke id
+;;   -notify-read id
+;;
+
 (require 'cl)
 
 (defvar remacs-name "remacs")
@@ -247,6 +272,10 @@ remacs or call `M-x remacs-force-delete' to forcibly disconnect it.")
                ;; -msg MESSAGE:  Display a message
                ((and (equal "-msg" arg) command-line-args-left)
                 (message "remacs msg: %s" (pop command-line-args-left)))
+
+               ;; -notify-invoke ID:  Invoke a notification
+               ((and (equal "-notify-invoke" arg) command-line-args-left)
+                (remacs-notify-invoke (pop command-line-args-left)))
 
                ;; Unknown command.
                (t (error "Unknown command: %s" arg))))
@@ -527,6 +556,53 @@ remacs or call `M-x remacs-force-delete' to forcibly disconnect it.")
 (defun remacs-process-log(server client msg)
   (remacs-log msg client))
 
+;;;
+;;; Notification
+;;;
+
+(defvar remacs-notify-counter 0)
+(defvar remacs-notify-alist '())
+
+(unless (fboundp 'get-alist)
+  (defun get-alist (key alist)
+    (cdr (assoc key alist))))
+(unless (fboundp 'set-alist)
+  (defun set-alist (symbol key value)
+    "Set cdr of an element (KEY . ...) in the alist bound to SYMBOL to VALUE."
+    (or (boundp symbol)
+        (set symbol nil))
+    (set symbol (put-alist key value (symbol-value symbol))))
+  (defun put-alist (key value alist)
+    "Set cdr of an element (KEY . ...) in ALIST to VALUE and return ALIST.
+If there is no such element, create a new pair (KEY . VALUE) and
+return a new alist whose car is the new pair and cdr is ALIST."
+    (let ((elm (assoc key alist)))
+      (if elm
+          (progn
+            (setcdr elm value)
+            alist)
+        (cons (cons key value) alist)))))
+
+(defun remacs-notify (title body &optional cb)
+  (setq remacs-notify-counter (+ 1 remacs-notify-counter))
+  (set-alist 'remacs-notify-alist (symbol-value 'remacs-notify-counter)
+             `(,(symbol-value 'remacs-notify-counter) title body cb))
+  (let ((msg (format "-notify %d %s %s" remacs-notify-counter
+                     (remacs-quote-arg title) (remacs-quote-arg body))))
+    (dolist (proc remacs-clients)
+      (remacs-send-string proc msg))))
+
+(defun remacs-notify-invoke (args)
+  (let ((id (cdr args))
+        (notif (get-alist id remacs-notify-alist)))
+    (if (not notif)
+        (message (format "Failed to find notification: %s" id))
+      (remacs-log (format "invoked %s" id)))))
+
+;;;
+;;; Test code
+;;;
+
 (defun remacs-test ()
   (interactive)
   (setq remacs-log t)
@@ -534,14 +610,7 @@ remacs or call `M-x remacs-force-delete' to forcibly disconnect it.")
   (remacs-start)
   (get-buffer-create remacs-buffer)
   (switch-to-buffer remacs-buffer)
-)
-
-(defun remacs-notify (title body &optional cb)
-  (let ((msg (format "-notify %s %s" (remacs-quote-arg title)
-                     (remacs-quote-arg body))))
-    (remacs-log msg)
-    (dolist (proc remacs-clients)
-      (remacs-send-string proc msg))))
+  )
 
 (defun remacs-notify-test ()
   (interactive)

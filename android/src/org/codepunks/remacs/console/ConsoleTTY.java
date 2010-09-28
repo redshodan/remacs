@@ -379,8 +379,8 @@ public class ConsoleTTY implements VDUDisplay, OnKeyListener
         mColors = Colors.DEFAULT_COLORS.clone();
 	}
 
-    public void handleNotification(String title, String body)
+    public void handleNotification(int id, String title, String body)
     {
-        mView.handleNotification(title, body);
+        mView.handleNotification(id, title, body);
     }
 }
