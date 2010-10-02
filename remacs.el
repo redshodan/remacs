@@ -176,9 +176,9 @@ remacs or call `M-x remacs-force-delete' to forcibly disconnect it.")
         (setq string (substring string (match-end 0)))
         ;; Parse the request
         (with-current-buffer remacs-proto-buffer
+          (erase-buffer)
           (insert request)
-          (setq xml (xml-parse-region (point-min) (point-max)))
-          (erase-buffer))
+          (setq xml (xml-parse-region (point-min) (point-max))))
         (cond
          ;; <setup>
          ((eq (car (xml-node-name xml)) 'setup)
@@ -517,5 +517,5 @@ return a new alist whose car is the new pair and cdr is ALIST."
 
 (defun remacs-notify-test ()
   (interactive)
-  (remacs-notify "1 title" "1 bod")
+  (remacs-notify "1 title" "1 body")
   (remacs-notify "2 title" "2 body"))

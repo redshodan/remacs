@@ -2,6 +2,7 @@ package org.codepunks.remacs.transport;
 
 import android.util.Log;
 import java.io.IOException;
+import java.io.StringBufferInputStream;
 import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
@@ -9,6 +10,10 @@ import java.nio.charset.Charset;
 import java.nio.charset.CharsetDecoder;
 import java.nio.charset.CoderResult;
 import java.nio.charset.CodingErrorAction;
+
+import org.w3c.dom.*;
+import org.xml.sax.*;
+import javax.xml.parsers.*;
 
 import org.codepunks.remacs.ConnectionCfg;
 import org.codepunks.remacs.RemacsCfg;
@@ -25,9 +30,9 @@ public abstract class Transport implements Runnable
     //  - middle 4 bits are size of data.
     //  - most significant bit indicates size is number of size bytes.
     public final long CMD_NONE = -1;
-    public final long CMD_DATA = 0;
-    public final long CMD_TTY = 1;
-    public final long CMD_NOTIFY = 2;
+    public final long CMD_TTY = 0;
+    public final long CMD_CMD = 1;
+    public final long CMD_BLOCK = 2;
     public final long CMD_MAX = 7;
     public final long CMD_CMDS = 1 | 2 | 4;
     public final long CMD_SIZE_MAX = 15;
@@ -126,43 +131,34 @@ public abstract class Transport implements Runnable
         }
     }
 
-    public void sendTTY(boolean initial)
+    public void sendTTY()
     {
-        String data;
-
-        if (initial)
-        {
-            data = String.format("term=%s;row=%d;col=%d", mCfg.term,
-                                 mCfg.term_height, mCfg.term_width);
-        }
-        else
-        {
-            data = String.format("row=%d;col=%d", mCfg.term_width,
-                                 mCfg.term_height);
-        }
-        sendCmd(CMD_TTY, data);
+        String data =
+            String.format("<setup><tty term='%s' row='%d' col='%d'/></setup>",
+                          mCfg.term, mCfg.term_height, mCfg.term_width);
+        sendCmd(CMD_CMD, data);
     }
 
     public void sendData(String data)
     {
-        sendCmd(CMD_DATA, data);
+        sendCmd(CMD_TTY, data);
     }
     
     public void sendData(byte[] data)
     {
-        sendCmd(CMD_DATA, data);
+        sendCmd(CMD_TTY, data);
     }
 
     public void sendData(int data)
     {
         mCharBuff[0] = (byte)(data & 0xFF);
-        sendCmd(CMD_DATA, mCharBuff);
+        sendCmd(CMD_TTY, mCharBuff);
     }
     
     public void run()
     {
         connect();
-        sendTTY(true);
+        sendTTY();
         
         try
         {
@@ -264,9 +260,9 @@ public abstract class Transport implements Runnable
 
         Log.d(TAG, String.format("decodeStringData: length=%d size=%d", length,
                                  mCBuff.position()));
-        if (mCmd == CMD_DATA)
+        if (mCmd == CMD_TTY)
         {
-            Log.d(TAG, "DATA");
+            Log.d(TAG, "TTY DATA");
             mTty.getTextWidths(mChars, length, mWidths);
             for (int i = 0; i < length; ++i)
             {
@@ -282,20 +278,57 @@ public abstract class Transport implements Runnable
             mTty.putString(mChars, mWAttrs, 0, length);
             mTty.redraw();
         }
-        else if (mCmd == CMD_NOTIFY)
+        else if (mCmd == CMD_CMD)
         {
             String data = new String(mChars, 0, length);
-            Log.d(TAG, String.format("NOTIFY: %s", data));
-            String[] words = data.split(" ");
-            int id = -1;
+            Log.d(TAG, String.format("CMD: %s", data));
             try
             {
-                id = Integer.parseInt(words[0]);
+                DocumentBuilderFactory factory =
+                    DocumentBuilderFactory.newInstance();
+                DocumentBuilder builder = factory.newDocumentBuilder();
+                Document document = builder.parse(
+                    new StringBufferInputStream(data), null);
+                Node cmd = document.getFirstChild();
+                Log.d(TAG, String.format("nodename: %s", cmd.getNodeName()));
+                if (cmd.getNodeName().compareTo("notify") == 0)
+                {
+                    NamedNodeMap attrs = cmd.getAttributes();
+                    int id = Integer.parseInt(
+                        attrs.getNamedItem("id").getNodeValue());
+                    NodeList children = cmd.getChildNodes();
+                    String title = null;
+                    String body = null;
+                    for (int i = 0; i < children.getLength(); ++i)
+                    {
+                        Node child = children.item(i);
+                        if (child.getNodeName().compareTo("title") == 0)
+                        {
+                            title = child.getFirstChild().getNodeValue();
+                        }
+                        else if (child.getNodeName().compareTo("body") == 0)
+                        {
+                            body = child.getFirstChild().getNodeValue();
+                        }
+                    }
+                    if ((title == null) || (body == null))
+                    {
+                        Log.w(TAG, "Invalid notify command: " + data);
+                    }
+                    else
+                    {
+                        mTty.handleNotification(id, title, body);
+                    }
+                }
+                else
+                {
+                    Log.w(TAG, "Unknown command: " + data);
+                }
             }
             catch (Exception e)
             {
             }
-            mTty.handleNotification(id, words[1], words[2]);
+            
         }
         
         mCBuff.clear();

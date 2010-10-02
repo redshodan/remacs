@@ -59,7 +59,6 @@ public class RemacsService extends Service
     {
         Log.d(TAG, "RemacsService.onStart: Received start id " +
               startId + ": " + intent);
-        handleNotification(1, "title", "body");
     }
 
     // Android 2.0
