@@ -135,7 +135,7 @@ public class RemacsService extends Service
         int id = Integer.parseInt(
             attrs.getNamedItem("id").getNodeValue());
         String title = null;
-        String body = null;
+        String body = "";
         NodeList children = cmd.getChildNodes();
         for (int i = 0; i < children.getLength(); ++i)
         {
@@ -149,7 +149,7 @@ public class RemacsService extends Service
                 body = child.getFirstChild().getNodeValue();
             }
         }
-        if ((title == null) || (body == null))
+        if (title == null)
         {
             Log.w(TAG, "Invalid notify command: " + data);
         }
