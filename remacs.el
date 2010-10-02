@@ -27,34 +27,32 @@
 ;; Protocol:
 ;;
 ;; Sent:
-;;   -emacs-pid 12345
-;;   -error string
-;;   -notify id title body
-;;   -suspend
+;;   <emacs pid='12345'/>
+;;   <error>str</error>
+;;   <notify id='12345'><title>str</title><body>str</body></notify>
+;;   <suspend/>
 ;;
 ;; Received:
-;;   -version
-;;   -resume
-;;   -supend
-;;   -ignore
-;;   -tty
-;;   -position
-;;   -file
-;;   -eval
-;;   -env
-;;   -dir
-;;   -msg
-;;   -notify-invoke id
-;;   -notify-read id
+;;   <setup>
+;;     <tty name='' term='' row='' col=''/>
+;;     <env>
+;;     <dir>
+;;   </setup>
+;;   <eval>str</eval>
+;;   <msg>str</msg>
+;;   <notify id='12345' type='invoke|read'/>
 ;;
 
 (require 'cl)
+(require 'xml)
 
 (defvar remacs-name "remacs")
 (defvar remacs-socket-dir
   (format "%s/remacs%d" (or (getenv "TMPDIR") "/tmp") (user-uid)))
 (defvar remacs-file (expand-file-name remacs-name remacs-socket-dir))
 (defvar remacs-buffer "*remacs*")
+(defvar remacs-proto-buffer "*remacs-proto*")
+(buffer-disable-undo (get-buffer-create remacs-proto-buffer))
 (defvar remacs-log nil)
 
 (defvar remacs-process nil)
@@ -148,181 +146,107 @@ remacs or call `M-x remacs-force-delete' to forcibly disconnect it.")
       (remacs-delete-client proc))))
 
 (defun* remacs-process-filter (proc string)
+  (add-to-list 'remacs-clients proc)
   (remacs-log (concat "Received " string) proc)
   (let ((prev (process-get proc 'previous-string)))
     (when prev
       (setq string (concat prev string))
       (process-put proc 'previous-string nil)))
   ;;(condition-case err
-      (progn
-        (add-to-list 'remacs-clients proc)
-        (if (not (string-match "\n" string))
-            ;; Save for later any partial line that remains.
-            (when (> (length string) 0)
-              (process-put proc 'previous-string string))
+  (progn
+    (if (not (string-match "\000" string))
+        ;; Save for later any partial line that remains.
+        (when (> (length string) 0)
+          (process-put proc 'previous-string string))
 
-          (let ((use-current-frame nil)
-                (request (substring string 0 (match-beginning 0)))
-                (coding-system (and default-enable-multibyte-characters
-                                    (or file-name-coding-system
-                                        default-file-name-coding-system)))
-                frame ; The frame that was opened for the client.
-                dontkill       ; t if the client should not be killed.
-                commands
-                dir
-                tty-name       ; the tty name.
-                tty-type       ; string.
-                files
-                filepos
-                command-line-args-left
-                arg)
-            ;; Remove this line from STRING.
-            (setq string (substring string (match-end 0)))
-            (setq command-line-args-left
-                  (mapcar 'remacs-unquote-arg (split-string request " " t)))
-            (while (setq arg (pop command-line-args-left))
-              (cond
-               ;; -version CLIENT-VERSION: obsolete at birth.
-               ((and (equal "-version" arg) command-line-args-left)
-                (pop command-line-args-left))
-
-               ;; -resume:  Resume a suspended tty frame.
-               ((equal "-resume" arg)
-                (lexical-let ((terminal (process-get proc 'terminal)))
-                  (setq dontkill t)
-                  (push (lambda ()
-                          (when (eq (terminal-live-p terminal) t)
-                            (resume-tty terminal)))
-                        commands)))
-
-               ;; -suspend:  Suspend the client's frame.  (In case we
-               ;; get out of sync, and a C-z sends a SIGTSTP to
-               ;; emacsclient.)
-               ((equal "-suspend" arg)
-                (lexical-let ((terminal (process-get proc 'terminal)))
-                  (setq dontkill t)
-                  (push (lambda ()
-                          (when (eq (terminal-live-p terminal) t)
-                            (suspend-tty terminal)))
-                        commands)))
-
-               ;; -ignore COMMENT:  Noop; useful for debugging emacsclient.
-               ;; (The given comment appears in the server log.)
-               ((and (equal "-ignore" arg) command-line-args-left
-                     (setq dontkill t)
-                     (pop command-line-args-left)))
-
-               ;; -tty DEVICE-NAME TYPE:  Open a new tty frame at the client.
-               ((and (equal "-tty" arg)
-                     (cdr command-line-args-left))
-                (setq tty-name (pop command-line-args-left)
-                      tty-type (pop command-line-args-left)
-                      dontkill (or dontkill
-                                   (not use-current-frame))))
-
-               ;; -position LINE[:COLUMN]:  Set point to the given
-               ;;  position in the next file.
-               ((and (equal "-position" arg)
-                     command-line-args-left
-                     (string-match "\\+\\([0-9]+\\)\\(?::\\([0-9]+\\)\\)?"
-                                   (car command-line-args-left)))
-                (setq arg (pop command-line-args-left))
-                (setq filepos
-                      (cons (string-to-number (match-string 1 arg))
-                            (string-to-number (or (match-string 2 arg) "")))))
-
-               ;; -file FILENAME:  Load the given file.
-               ((and (equal "-file" arg)
-                     command-line-args-left)
-                (let ((file (pop command-line-args-left)))
-                  (if coding-system
-                      (setq file (decode-coding-string file coding-system)))
-                  (setq file (expand-file-name file dir))
-                  (push (cons file filepos) files)
-                  (remacs-log (format "New file: %s %s"
-                                      file (or filepos "")) proc))
-                (setq filepos nil))
-
-               ;; -eval EXPR:  Evaluate a Lisp expression.
-               ((and (equal "-eval" arg)
-                     command-line-args-left)
-                (if use-current-frame
-                    (setq use-current-frame 'always))
-                (lexical-let ((expr (pop command-line-args-left)))
-                  (if coding-system
-                      (setq expr (decode-coding-string expr coding-system)))
-                  (push (lambda () (remacs-eval-and-print expr proc))
-                        commands)
-                  (setq filepos nil)))
-
-               ;; -env NAME=VALUE:  An environment variable.
-               ((and (equal "-env" arg) command-line-args-left)
-                (let ((var (pop command-line-args-left)))
-                  ;; XXX Variables should be encoded as in getenv/setenv.
-                  (process-put proc 'env
-                               (cons var (process-get proc 'env)))))
-
-               ;; -dir DIRNAME:  The cwd of the emacsclient process.
-               ((and (equal "-dir" arg) command-line-args-left)
-                (setq dir (pop command-line-args-left))
-                (if coding-system
-                    (setq dir (decode-coding-string dir coding-system)))
-                (setq dir (command-line-normalize-file-name dir)))
-
-               ;; -msg MESSAGE:  Display a message
-               ((and (equal "-msg" arg) command-line-args-left)
-                (message "remacs msg: %s" (pop command-line-args-left)))
-
-               ;; -notify-invoke ID:  Invoke a notification
-               ((and (equal "-notify-invoke" arg) command-line-args-left)
-                (remacs-notify-invoke (pop command-line-args-left)))
-
-               ;; Unknown command.
-               (t (error "Unknown command: %s" arg))))
-
-            (setq frame
-                  (cond
-                   ((and use-current-frame
-                         (or (eq use-current-frame 'always)
-                             ;; We can't use the Emacs daemon's
-                             ;; terminal frame.
-                             (not (and (daemonp)
-                                       (null (cdr (frame-list)))
-                                       (eq (selected-frame)
-                                           terminal-frame)))))
-                    (setq tty-name nil tty-type nil)
-                    (if display (remacs-select-display display)))
-                   ((eq tty-name 'window-system)
-                    (remacs-create-window-system-frame display proc))
-                   ;; When resuming on a tty, tty-name is nil.
-                   (tty-name
-                    (remacs-create-tty-frame tty-name tty-type proc))))
-
-            (process-put
-             proc 'continuation
-             (lexical-let ((proc proc)
-                           (files files)
-                           (commands commands)
-                           (dontkill dontkill)
-                           (frame frame)
-                           (dir dir)
-                           (tty-name tty-name))
-               (lambda ()
-                 (with-current-buffer (get-buffer-create remacs-buffer)
-                   ;; Use the same cwd as the emacsclient, if possible, so
-                   ;; relative file names work correctly, even in `eval'.
-                   (let ((default-directory
-                           (if (and dir (file-directory-p dir))
-                               dir default-directory)))
-                     (remacs-execute proc commands frame tty-name))))))
-
-            (when (or frame files)
-              (remacs-goto-toplevel proc))
-
-            (remacs-execute-continuation proc))))
-    ;; condition-case
-    ;;(error (remacs-return-error proc err)))
-      )
+      (let ((request (substring string 0 (match-beginning 0)))
+            (coding-system (and default-enable-multibyte-characters
+                                (or file-name-coding-system
+                                    default-file-name-coding-system)))
+            xml
+            frame ; The frame that was opened for the client.
+            commands
+            dir
+            tty-name       ; the tty name.
+            tty-term       ; string.
+            files
+            command-line-args-left
+            arg)
+        ;; Remove this line from STRING.
+        (setq string (substring string (match-end 0)))
+        ;; Parse the request
+        (with-current-buffer remacs-proto-buffer
+          (insert request)
+          (setq xml (xml-parse-region (point-min) (point-max)))
+          (erase-buffer))
+        (cond
+         ;; <setup>
+         ((eq (car (xml-node-name xml)) 'setup)
+          (let ((tty
+                 (xml-node-name (xml-get-children (xml-node-name xml) 'tty))))
+            (setq tty-name (xml-get-attribute tty 'name)
+                  tty-term (xml-get-attribute tty 'term))))
+           
+           ;; ;; -eval EXPR:  Evaluate a Lisp expression.
+           ;; ((and (equal "-eval" arg)
+           ;;       command-line-args-left)
+           ;;  (lexical-let ((expr (pop command-line-args-left)))
+           ;;    (if coding-system
+           ;;        (setq expr (decode-coding-string expr coding-system)))
+           ;;    (push (lambda () (remacs-eval-and-print expr proc))
+           ;;          commands)))
+           
+           ;; ;; -env NAME=VALUE:  An environment variable.
+           ;; ((and (equal "-env" arg) command-line-args-left)
+           ;;  (let ((var (pop command-line-args-left)))
+           ;;    ;; XXX Variables should be encoded as in getenv/setenv.
+           ;;    (process-put proc 'env
+           ;;                 (cons var (process-get proc 'env)))))
+           
+           ;; ;; -dir DIRNAME:  The cwd of the emacsclient process.
+           ;; ((and (equal "-dir" arg) command-line-args-left)
+           ;;  (setq dir (pop command-line-args-left))
+           ;;  (if coding-system
+           ;;      (setq dir (decode-coding-string dir coding-system)))
+           ;;  (setq dir (command-line-normalize-file-name dir)))
+           
+           ;; ;; -msg MESSAGE:  Display a message
+           ;; ((and (equal "-msg" arg) command-line-args-left)
+           ;;  (message "remacs msg: %s" (pop command-line-args-left)))
+           
+           ;; ;; -notify-invoke ID:  Invoke a notification
+           ;; ((and (equal "-notify-invoke" arg) command-line-args-left)
+           ;;  (remacs-notify-invoke (pop command-line-args-left)))
+           
+         ;; Unknown command.
+         (t (error "Unknown command: %s" arg)))
+        
+        (setq frame (remacs-create-tty-frame tty-name tty-term proc))
+        
+        (process-put
+         proc 'continuation
+         (lexical-let ((proc proc)
+                       (files files)
+                       (commands commands)
+                       (frame frame)
+                       (dir dir)
+                       (tty-name tty-name))
+           (lambda ()
+             (with-current-buffer (get-buffer-create remacs-buffer)
+               ;; Use the same cwd as the emacsclient, if possible, so
+               ;; relative file names work correctly, even in `eval'.
+               (let ((default-directory
+                       (if (and dir (file-directory-p dir))
+                           dir default-directory)))
+                 (remacs-execute proc commands frame tty-name))))))
+        
+        (when (or frame files)
+          (remacs-goto-toplevel proc))
+        
+        (remacs-execute-continuation proc))))
+  ;; condition-case
+  ;;(error (remacs-return-error proc err)))
+  )
 
 (defun remacs-goto-toplevel (proc)
   (condition-case nil
@@ -411,7 +335,7 @@ remacs or call `M-x remacs-force-delete' to forcibly disconnect it.")
   (dolist (proc (remacs-clients-with 'terminal terminal))
     (remacs-log (format "remacs-handle-suspend-tty, terminal %s" terminal) proc)
     (condition-case err
-        (remacs-send-string proc "-suspend \n")
+        (remacs-send-string proc "<suspend/>")
       (file-error                       ;The pipe/socket was closed.
        (ignore-errors (remacs-delete-client proc))))))
 
@@ -459,8 +383,8 @@ remacs or call `M-x remacs-force-delete' to forcibly disconnect it.")
     (switch-to-buffer (get-buffer-create "*scratch*") 'norecord)
 
     ;; Reply with our pid.
-    (remacs-send-string proc (concat "-emacs-pid "
-                                     (number-to-string (emacs-pid)) "\n"))
+    (remacs-send-string proc (format "<emacs pid='%d'/>" (emacs-pid)))
+    
     frame))
 
 (defmacro remacs-with-environment (env vars &rest body)
@@ -512,34 +436,13 @@ remacs or call `M-x remacs-force-delete' to forcibly disconnect it.")
 (defun remacs-return-error (proc err)
   (ignore-errors
     (remacs-send-string
-     proc (concat "-error " (remacs-quote-arg
-                             (error-message-string err))))
+     proc (format "<error>%s</error>" (error-message-string err)))
     (remacs-log (error-message-string err) proc)
     (delete-process proc)))
 
 (defun remacs-send-string (proc string)
   (remacs-log (concat "Sent " string) proc)
-  (process-send-string proc (concat string "\n")))
-
-(defun remacs-unquote-arg (arg)
-  (replace-regexp-in-string
-   "&." (lambda (s)
-          (case (aref s 1)
-            (?& "&")
-            (?- "-")
-            (?n "\n")
-            (t " ")))
-   arg t t))
-
-(defun remacs-quote-arg (arg)
-  (replace-regexp-in-string
-   "[-&\n ]" (lambda (s)
-               (case (aref s 0)
-                 (?& "&&")
-                 (?- "&-")
-                 (?\n "&n")
-                 (?\s "&_")))
-   arg t t))
+  (process-send-string proc (concat string "\000")))
 
 (defun remacs-log (string &optional client)
   (when remacs-log
@@ -587,8 +490,8 @@ return a new alist whose car is the new pair and cdr is ALIST."
   (setq remacs-notify-counter (+ 1 remacs-notify-counter))
   (set-alist 'remacs-notify-alist (symbol-value 'remacs-notify-counter)
              `(,(symbol-value 'remacs-notify-counter) title body cb))
-  (let ((msg (format "-notify %d %s %s" remacs-notify-counter
-                     (remacs-quote-arg title) (remacs-quote-arg body))))
+  (let ((msg (format "<notify id='%d'><title>%s</title><body>%s</body></notify>"
+                     remacs-notify-counter title body)))
     (dolist (proc remacs-clients)
       (remacs-send-string proc msg))))
 

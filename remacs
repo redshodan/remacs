@@ -23,16 +23,18 @@
 
 import os, sys, select, pty, termios, socket, struct, fcntl
 import errno, signal, re, ssl, subprocess, time
+from xml.dom import minidom as dom
 from optparse import OptionParser
+
 
 # Command byte:
 #  - least significant 3 bits are command.
 #  - middle 4 bits are size of data.
 #  - most significant bit indicates size is number of size bytes.
 CMD_NONE = -1
-CMD_DATA = 0
-CMD_TTY = 1
-CMD_NOTIFY = 2
+CMD_TTY = 0
+CMD_CMD = 1
+CMD_BLOCK = 2
 CMD_MAX = 7
 CMD_CMDS = 1 | 2 | 4
 CMD_SIZE_MAX = 16
@@ -40,6 +42,14 @@ CMD_SIZE_MAXED = 128
 
 log_file = None
 is_server = False
+
+# Bleck
+impl = dom.getDOMImplementation()
+d = impl.createDocument(None, None, None)
+XML_PREFIX = len(d.toxml())
+d.unlink()
+del d
+del impl
 
 def initLog(name):
     global log_file
@@ -59,6 +69,9 @@ def delList(val, list):
         if list[index] == val:
             del list[index]
             return
+
+def toxml(elem):
+    return elem.toxml()[XML_PREFIX:]
 
 def log(*args):
     for arg in args:
@@ -92,7 +105,7 @@ class PipeBuff(object):
             self.decodeCmd()
         else:
             if self.encoder:
-                self.encodeCmd(CMD_DATA, self.data)
+                self.encodeCmd(CMD_TTY, self.data)
                 log("encoded buff: %s" % self.output)
             else:
                 log("output buff: %s" % self.output)
@@ -162,7 +175,7 @@ class PipeBuff(object):
         log("decoded data: %s" % self.data)
         log("decoded output: %s" % self.output)
         log("decoded cmd_data: %s" % cmd_data)
-        if cmd_data and self.cmd != CMD_DATA:
+        if cmd_data and self.cmd != CMD_TTY:
             self.output = self.cb(cmd, cmd_data)
         if ret:
             log("Recursing decodeCmd")
@@ -437,45 +450,23 @@ class Server(object):
         finally:
             self.mgr.close()
 
-    def startEmacs(self, term):
-        self.sendToEmacs("tty", os.ttyname(self.slave), term)
-
-    def escape(self, str):
-        ret = []
-        if str[0] == "-":
-            ret.append("&")
-        for c in str:
-            if c == " ":
-                ret.append("&_")
-            elif c == "\n":
-                ret.append("&n")
-            elif c == "&":
-                ret.append("&&")
-            else:
-                ret.append(c)
-        return "".join(ret)
-
-    def unescape(self, str):
-        return str.replace("&&", "&").replace("&-", "-").replace("&n", "\n")
-    
-    def sendToEmacs(self, cmd, *args):
-        out = []
-        for arg in args:
-            out.append(self.escape(arg.strip()))
-        log("sendToEmacs:-%s %s\n" % (cmd, " ".join(out)))
-        os.write(self.pipe, "-%s %s\n" % (cmd, " ".join(out)))
+    def sendToEmacs(self, cmd):
+        buff = cmd + "\000"
+        log("sendToEmacs:" + buff)
+        os.write(self.pipe, buff)
 
     def receivedFromEmacs(self, buff):
         log("Received from emacs: %s" % buff)
-        words = buff.split(" ")
-        if words[0] == "-emacs-pid":
-            self.emacs_pid = words[1]
+        d = dom.parseString(buff)
+        elem = d.firstChild
+        if elem.nodeName == "emacs":
+            self.emacs_pid = elem.getAttribute("pid")
             log("Emacs PID=%s" % self.emacs_pid)
-        elif words[0] == "-notify":
-            self.mgr.sendCmd(CMD_NOTIFY, words[1] + " " + words[2] + " " +
-                             words[3])
+        elif elem.nodeName == "notify":
+            self.mgr.sendCmd(CMD_CMD, buff)
         else:
             log("Invalid command from emacs")
+        d.unlink()
 
     def pipe_cb(self, fd):
         log("pipe_cb")
@@ -491,7 +482,7 @@ class Server(object):
                 log("pipe_cb: EXCEPT: %s" % e)
                 raise
         if buff:
-            for line in buff.split("\n"):
+            for line in buff.split("\000"):
                 if line and len(line):
                     self.receivedFromEmacs(line)
         else:
@@ -500,20 +491,26 @@ class Server(object):
     def cmd_cb(self, cmd, data):
         log("SERVER CMD: %s DATA: %s" % (cmd, data))
         if cmd == CMD_TTY:
-            words = {}
-            for word in data.split(";"):
-                key, val = word.split("=")
-                words[key] = val
-            buff = struct.pack("HHHH", int(words["row"]), int(words["col"]),
-                               0, 0)
-            log("winsize %d: %s" % (len(buff), buff))
-            log("Setting winsize: %s %s" % (words["row"], words["col"]))
-            fcntl.ioctl(self.tty, termios.TIOCSWINSZ, buff)
-            if not self.started:
-                self.startEmacs(words["term"])
-                self.started = True
-        elif cmd == CMD_DATA:
             return data
+        elif cmd == CMD_CMD:
+            d = dom.parseString(data)
+            elem = d.firstChild
+            if elem.nodeName == "setup":
+                tty = elem.getElementsByTagName("tty")
+                if tty:
+                    tty = tty[0]
+                    row = int(tty.getAttribute("row"))
+                    col = int(tty.getAttribute("col"))
+                    buff = struct.pack("HHHH", row, col, 0, 0)
+                    log("Setting winsize: %s %s" % (row, col))
+                    fcntl.ioctl(self.tty, termios.TIOCSWINSZ, buff)
+                    tty.setAttribute("name", os.ttyname(self.slave))
+                if not self.started:
+                    self.sendToEmacs(toxml(d))
+                    self.started = True
+            else:
+                log("Unkown command: " + data)
+            d.unlink()
 
 class Client(object):
     def __init__(self, host, transport):
@@ -542,7 +539,7 @@ class Client(object):
             self.mgr = TTYManager(self.pipe.stdout.fileno(),
                                   self.pipe.stdin.fileno(),
                                   self.tty.fileno(), self.cmd_cb)
-            self.sigWINCH(0, None)
+            self.sigWINCH()
             self.mgr.run()
         except Exception, e:
             print "Main loop exception: %s %s" % (type(e), str(e))
@@ -551,18 +548,15 @@ class Client(object):
         finally:
             self.mgr.close()
 
-    def sigWINCH(self, signum, frame):
+    def sigWINCH(self, signum=None, frame=None):
         try:
             buff = 'abcdefgh'
             buff = fcntl.ioctl(self.tty, termios.TIOCGWINSZ, buff)
             (row, col, x, y) = struct.unpack("HHHH", buff)
             log("winsize %d: %s" % (len(buff), buff))
-            if not signum and not frame:
-                cmd = "term=%s;" % self.term
-            else:
-                cmd = ""
-            cmd = "%srow=%d;col=%d" % (cmd, row, col)
-            self.mgr.sendCmd(CMD_TTY, cmd)
+            self.mgr.sendCmd(
+                CMD_CMD, "<setup><tty term='%s' row='%d' col='%d'/></setup>" %
+                (self.term, row, col))
         except Exception, e:
             log("sigWINCH: %s" % str(e))
             import traceback
@@ -571,7 +565,7 @@ class Client(object):
 
     def cmd_cb(self, cmd, data):
         log("CLIENT CMD: %s DATA: %s" % (cmd, data))
-        if cmd == CMD_DATA:
+        if cmd == CMD_TTY:
             return data
         else:
             return None
