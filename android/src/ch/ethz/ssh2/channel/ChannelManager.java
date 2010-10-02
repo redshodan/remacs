@@ -35,19 +35,22 @@ public class ChannelManager implements MessageHandler
 {
 	private static final Logger log = Logger.getLogger(ChannelManager.class);
 
-	private HashMap x11_magic_cookies = new HashMap();
+	private HashMap<String,X11ServerData> x11_magic_cookies =
+        new HashMap<String,X11ServerData>();
 
 	private TransportManager tm;
 
-	private Vector channels = new Vector();
+	private Vector<Channel> channels = new Vector<Channel>();
 	private int nextLocalChannel = 100;
 	private boolean shutdown = false;
 	private int globalSuccessCounter = 0;
 	private int globalFailedCounter = 0;
 
-	private HashMap remoteForwardings = new HashMap();
+	private HashMap<Integer,RemoteForwardingData> remoteForwardings =
+        new HashMap<Integer,RemoteForwardingData>();
 
-	private Vector listenerThreads = new Vector();
+	private Vector<IChannelWorkerThread> listenerThreads =
+        new Vector<IChannelWorkerThread>();
 
 	private boolean listenerThreadsAllowed = true;
 

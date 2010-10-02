@@ -185,8 +185,8 @@ public class RemacsActivity extends Activity
                                  host, port, user, encoding, term, scrollback));
     }
 
-    public void handleNotification(int id, String title, String body)
+    public void handleCmd(String data)
     {
-        mService.handleNotification(id, title, body);
+        mService.handleCmd(data);
     }
 }

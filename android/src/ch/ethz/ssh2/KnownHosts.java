@@ -60,7 +60,8 @@ public class KnownHosts
 		}
 	}
 
-	private LinkedList publicKeys = new LinkedList();
+	private LinkedList<KnownHostsEntry> publicKeys =
+        new LinkedList<KnownHostsEntry>();
 
 	public KnownHosts()
 	{
@@ -245,7 +246,7 @@ public class KnownHosts
 
 	private Vector getAllKeys(String hostname)
 	{
-		Vector keys = new Vector();
+		Vector<Object> keys = new Vector<Object>();
 
 		synchronized (publicKeys)
 		{

@@ -102,7 +102,8 @@ public class TimeoutService
 	}
 
 	/* The list object is also used for locking purposes */
-	private static final LinkedList todolist = new LinkedList();
+	private static final LinkedList<TimeoutToken> todolist =
+        new LinkedList<TimeoutToken>();
 
 	private static Thread timeoutThread = null;
 
@@ -113,6 +114,7 @@ public class TimeoutService
 	 * @param handler
 	 * @return a TimeoutToken that can be used to cancel the timeout.
 	 */
+    @SuppressWarnings("unchecked")
 	public static final TimeoutToken addTimeoutHandler(long runTime, Runnable handler)
 	{
 		TimeoutToken token = new TimeoutToken(runTime, handler);

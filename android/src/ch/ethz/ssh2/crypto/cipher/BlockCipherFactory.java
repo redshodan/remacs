@@ -27,7 +27,7 @@ public class BlockCipherFactory
 		}
 	}
 
-	static Vector ciphers = new Vector();
+	static Vector<CipherEntry> ciphers = new Vector<CipherEntry>();
 
 	static
 	{

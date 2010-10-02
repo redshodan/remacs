@@ -10,8 +10,13 @@ import android.os.Binder;
 import android.os.IBinder;
 import android.util.Log;
 
+import java.io.*;
 import java.util.HashMap;
 import java.util.Map;
+import javax.xml.parsers.*;
+
+import org.w3c.dom.*;
+import org.xml.sax.*;
 
 public class RemacsService extends Service
 {
@@ -41,12 +46,24 @@ public class RemacsService extends Service
 
     protected NotificationManager mNM;
     protected final IBinder mBinder = new RemacsBinder();
-    protected Map mNotifMap;
+    protected Map<Integer, RemacsNotif> mNotifMap;
+    protected DocumentBuilder mParser;
 
     public RemacsService()
     {
         super();
         mNotifMap = new HashMap<Integer, RemacsNotif>();
+
+        try
+        {
+            DocumentBuilderFactory factory =
+                DocumentBuilderFactory.newInstance();
+            mParser = factory.newDocumentBuilder();
+        }
+        catch (Exception e)
+        {
+            Log.e(TAG, "Failed to create XML parser: " + e.toString());
+        }
     }
     
     @Override public void onCreate()
@@ -87,10 +104,60 @@ public class RemacsService extends Service
         return true;
     }
 
-    public void handleNotification(int id, String title, String body)
+    @SuppressWarnings("deprecation")
+    public void handleCmd(String data)
     {
-        mNotifMap.put(id, new RemacsNotif(id, title, body));
-        showNotification(id, title, body);
+        try
+        {
+            Document document = mParser.parse(
+                new StringBufferInputStream(data), null);
+            Node cmd = document.getFirstChild();
+            Log.d(TAG, String.format("nodename: %s", cmd.getNodeName()));
+            if (cmd.getNodeName().compareTo("notify") == 0)
+            {
+                handleNotify(cmd, data);
+            }
+            else
+            {
+                Log.w(TAG, "Unknown command: " + data);
+            }
+        }
+        catch (Exception e)
+        {
+            Log.e(TAG, "Failed handling command: " + e.toString());
+        }
+        mParser.reset();
+    }
+    
+    public void handleNotify(Node cmd, String data)
+    {
+        NamedNodeMap attrs = cmd.getAttributes();
+        int id = Integer.parseInt(
+            attrs.getNamedItem("id").getNodeValue());
+        String title = null;
+        String body = null;
+        NodeList children = cmd.getChildNodes();
+        for (int i = 0; i < children.getLength(); ++i)
+        {
+            Node child = children.item(i);
+            if (child.getNodeName().compareTo("title") == 0)
+            {
+                title = child.getFirstChild().getNodeValue();
+            }
+            else if (child.getNodeName().compareTo("body") == 0)
+            {
+                body = child.getFirstChild().getNodeValue();
+            }
+        }
+        if ((title == null) || (body == null))
+        {
+            Log.w(TAG, "Invalid notify command: " + data);
+        }
+        else
+        {
+            mNotifMap.put(id, new RemacsNotif(id, title, body));
+            showNotification(id, title, body);
+        }
     }
     
     protected void showNotification(int id, String title, String body)

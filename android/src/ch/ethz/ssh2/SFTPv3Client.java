@@ -69,7 +69,7 @@ public class SFTPv3Client
 	OutputStream os;
 
 	int protocol_version = 0;
-	HashMap server_extensions = new HashMap();
+	HashMap<String,byte[]> server_extensions = new HashMap<String,byte[]>();
 
 	int next_request_id = 1000;
 
@@ -704,7 +704,7 @@ public class SFTPv3Client
 
 	private final Vector scanDirectory(byte[] handle) throws IOException
 	{
-		Vector files = new Vector();
+		Vector<SFTPv3DirectoryEntry> files = new Vector<SFTPv3DirectoryEntry>();
 
 		while (true)
 		{

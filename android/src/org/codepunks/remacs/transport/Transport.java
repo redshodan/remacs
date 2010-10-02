@@ -2,7 +2,6 @@ package org.codepunks.remacs.transport;
 
 import android.util.Log;
 import java.io.IOException;
-import java.io.StringBufferInputStream;
 import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
@@ -10,10 +9,6 @@ import java.nio.charset.Charset;
 import java.nio.charset.CharsetDecoder;
 import java.nio.charset.CoderResult;
 import java.nio.charset.CodingErrorAction;
-
-import org.w3c.dom.*;
-import org.xml.sax.*;
-import javax.xml.parsers.*;
 
 import org.codepunks.remacs.ConnectionCfg;
 import org.codepunks.remacs.RemacsCfg;
@@ -282,53 +277,7 @@ public abstract class Transport implements Runnable
         {
             String data = new String(mChars, 0, length);
             Log.d(TAG, String.format("CMD: %s", data));
-            try
-            {
-                DocumentBuilderFactory factory =
-                    DocumentBuilderFactory.newInstance();
-                DocumentBuilder builder = factory.newDocumentBuilder();
-                Document document = builder.parse(
-                    new StringBufferInputStream(data), null);
-                Node cmd = document.getFirstChild();
-                Log.d(TAG, String.format("nodename: %s", cmd.getNodeName()));
-                if (cmd.getNodeName().compareTo("notify") == 0)
-                {
-                    NamedNodeMap attrs = cmd.getAttributes();
-                    int id = Integer.parseInt(
-                        attrs.getNamedItem("id").getNodeValue());
-                    NodeList children = cmd.getChildNodes();
-                    String title = null;
-                    String body = null;
-                    for (int i = 0; i < children.getLength(); ++i)
-                    {
-                        Node child = children.item(i);
-                        if (child.getNodeName().compareTo("title") == 0)
-                        {
-                            title = child.getFirstChild().getNodeValue();
-                        }
-                        else if (child.getNodeName().compareTo("body") == 0)
-                        {
-                            body = child.getFirstChild().getNodeValue();
-                        }
-                    }
-                    if ((title == null) || (body == null))
-                    {
-                        Log.w(TAG, "Invalid notify command: " + data);
-                    }
-                    else
-                    {
-                        mTty.handleNotification(id, title, body);
-                    }
-                }
-                else
-                {
-                    Log.w(TAG, "Unknown command: " + data);
-                }
-            }
-            catch (Exception e)
-            {
-            }
-            
+            mTty.handleCmd(data);
         }
         
         mCBuff.clear();

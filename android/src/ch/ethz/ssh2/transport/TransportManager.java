@@ -62,7 +62,7 @@ public class TransportManager
 		int high;
 	}
 
-	private final Vector asynchronousQueue = new Vector();
+	private final Vector<byte[]> asynchronousQueue = new Vector<byte[]>();
 	private Thread asynchronousThread = null;
 
 	class AsynchronousWorker extends Thread
@@ -137,7 +137,7 @@ public class TransportManager
 	TransportConnection tc;
 	KexManager km;
 
-	Vector messageHandlers = new Vector();
+	Vector<HandlerEntry> messageHandlers = new Vector<HandlerEntry>();
 
 	Thread receiveThread;
 
