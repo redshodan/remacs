@@ -29,7 +29,7 @@ public abstract class Transport implements Runnable
     public final long CMD_CMD = 1;
     public final long CMD_BLOCK = 2;
     public final long CMD_MAX = 7;
-    public final long CMD_CMDS = 1 | 2 | 4;
+    public final long CMD_CMDS = 7;
     public final long CMD_SIZE_MAX = 15;
     public final long CMD_SIZE_MAXED = 128;
 
@@ -90,7 +90,7 @@ public abstract class Transport implements Runnable
             {
                 byte[] cbuff;
                 long offset;
-                if (length <= CMD_SIZE_MAX + 1)
+                if (length <= CMD_SIZE_MAX)
                 {
                     cmd = cmd + (length << 3);
                     offset = 1;
@@ -191,10 +191,20 @@ public abstract class Transport implements Runnable
                             mCmd = mBBuff.get();
                             mCmd = (mCmd & 0xFF);
                             Log.d(TAG, String.format("unpacked cmd=%d", mCmd));
+                        }
+                        if (mCmdLength == 0)
+                        {
                             if ((mCmd & CMD_SIZE_MAXED) != 0)
                             {
-                                Log.d(TAG, "size maxed, getting next byte");
-                                mCmdLength = mBBuff.getInt();
+                                Log.d(TAG, "size maxed, getting next 4 bytes");
+                                try
+                                {
+                                    mCmdLength = mBBuff.getInt();
+                                }
+                                catch (java.nio.BufferUnderflowException e)
+                                {
+                                    continue;
+                                }
                             }
                             else
                             {
@@ -218,10 +228,12 @@ public abstract class Transport implements Runnable
                         {
                             decodeStringData(blen);
                             mCmd = CMD_NONE;
+                            mCmdLength = 0;
                         }
                     }
-                    catch (IndexOutOfBoundsException ex)
+                    catch (IndexOutOfBoundsException e)
                     {
+                        Log.w(TAG, e);
                     }
                 }
             } while (!Thread.interrupted() && (count > -1));
