@@ -3,3 +3,4 @@ log-client
 android/bin
 android/gen
 android/local.properties
+.*\.pyc

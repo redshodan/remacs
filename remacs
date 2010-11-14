@@ -504,7 +504,19 @@ class Client(object):
         else:
             self.term = "xterm"
         log("ssh cmd: %s" % self.cmd)
-        
+        self.initX()
+
+    def initX(self):
+        try:
+            if not len(os.environ["DISPLAY"]):
+                raise Exception("No DISPLAY variable set")
+            import systray
+            self.tray = systray.SysTray()
+            self.tray.start()
+            log("Setup X")
+        except Exception, e:
+            log("Failed to setup X interface: " + str(e))
+
     def run(self):
         try:
             print "cmd:", self.cmd
