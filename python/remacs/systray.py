@@ -1,4 +1,3 @@
-#!/usr/bin/python
 #
 # Copyright (C) 2009 Chris Newton <redshodan@gmail.com>
 #
@@ -21,42 +20,18 @@
 # $Revision$
 #
 
+
 import sys, os, threading, pty
 import gtk, gobject
 
-log = None
 
-try:
-    import vte
-    class Terminal(vte.Terminal):
-        def __init__(self):
-            vte.Terminal.__init__(self)
-            # self.pty_set_utf8(True)
-            self.connect('eof', self.onEOF)
-        def onEOF(self, obj):
-            self.thread_running = False
-    class TTYWindow(gtk.Window):
-        def __init__(self):
-            gtk.Window.__init__(self)
-            self.set_title("remacs")
-            self.connect('destroy', self.onDestroy)
-            self.tty = Terminal()
-            log("%s" % dir(self.tty))
-            self.tty.set_cursor_blinks(True)
-            self.tty.set_emulation("xterm")
-            self.add(self.tty)
-            self.show_all()
-            self.pair = pty.openpty()
-            self.tty.set_pty(self.pair[0])
-        def onDestroy(self, obj):
-            gtk.main_quit()
-except:
-    vte = None
+log = None
 
 
 class SysTray(threading.Thread):
-    def __init__(self):
+    def __init__(self, client):
         threading.Thread.__init__(self)
+        self.client = client
         self.icon = gtk.StatusIcon()
         self.icon.set_from_file("/usr/share/icons/hicolor/scalable/apps/emacs23.svg")
         self.icon.connect('activate', self.onLeftClick)
@@ -71,33 +46,26 @@ class SysTray(threading.Thread):
         item.show()
 
     def onLeftClick(self, widget):
-        print "left click"
+        log("left click")
 
     def onRightClick(self, widget, event_button, event_time):
-        print "right click"
+        log("right click")
         self.menu.popup(None, None, None, event_button, event_time, None)
 
     def onQuit(self, widget):
-        print "quit"
-        sys.exit(0)
+        log("quit")
+        gtk.main_quit()
+        self.client.quit()
 
     def startVTE(self):
-        if vte is not None:
-            self.ttywin = TTYWindow()
-            # try:
-            #     return os.fdopen(self.ttywin.tty.get_pty_object().get_fd())
-            # except:
-            # log("%s" % self.ttywin.tty.get_pty())
-            # return os.fdopen(self.ttywin.tty.get_pty())
-            log("%s" % self.ttywin.pair[1])
-            return os.fdopen(self.ttywin.pair[1])
+        try:
+            import ttywindow
+            self.ttywin = ttywindow.TTYWindow(self)
+            return self.ttywin.pair[1]
+        except:
+            pass
         return None
 
     def run(self):
         gtk.gdk.threads_init()
         gtk.main()
-
-
-if __name__ == '__main__':
-    tray = SysTray()
-    gtk.main()
