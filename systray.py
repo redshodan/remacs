@@ -21,8 +21,38 @@
 # $Revision$
 #
 
-import sys, os, threading
+import sys, os, threading, pty
 import gtk, gobject
+
+log = None
+
+try:
+    import vte
+    class Terminal(vte.Terminal):
+        def __init__(self):
+            vte.Terminal.__init__(self)
+            # self.pty_set_utf8(True)
+            self.connect('eof', self.onEOF)
+        def onEOF(self, obj):
+            self.thread_running = False
+    class TTYWindow(gtk.Window):
+        def __init__(self):
+            gtk.Window.__init__(self)
+            self.set_title("remacs")
+            self.connect('destroy', self.onDestroy)
+            self.tty = Terminal()
+            log("%s" % dir(self.tty))
+            self.tty.set_cursor_blinks(True)
+            self.tty.set_emulation("xterm")
+            self.add(self.tty)
+            self.show_all()
+            self.pair = pty.openpty()
+            self.tty.set_pty(self.pair[0])
+        def onDestroy(self, obj):
+            gtk.main_quit()
+except:
+    vte = None
+
 
 class SysTray(threading.Thread):
     def __init__(self):
@@ -50,6 +80,18 @@ class SysTray(threading.Thread):
     def onQuit(self, widget):
         print "quit"
         sys.exit(0)
+
+    def startVTE(self):
+        if vte is not None:
+            self.ttywin = TTYWindow()
+            # try:
+            #     return os.fdopen(self.ttywin.tty.get_pty_object().get_fd())
+            # except:
+            # log("%s" % self.ttywin.tty.get_pty())
+            # return os.fdopen(self.ttywin.tty.get_pty())
+            log("%s" % self.ttywin.pair[1])
+            return os.fdopen(self.ttywin.pair[1])
+        return None
 
     def run(self):
         gtk.gdk.threads_init()

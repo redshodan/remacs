@@ -498,20 +498,26 @@ class Client(object):
         self.host = host
         self.transport = transport
         self.cmd = self.transport + " -T " + self.host + " remacs --server"
-        self.tty = open(os.ttyname(sys.stdin.fileno()), "w+", 0)
         if "TERM" in os.environ:
             self.term = os.environ["TERM"]
         else:
             self.term = "xterm"
-        log("ssh cmd: %s" % self.cmd)
         self.initX()
+        log("VTE tty: %s" % self.tty)
+        if self.tty is None:
+            log("No VTE setup, continuing on stdin")
+            self.tty = open(os.ttyname(sys.stdin.fileno()), "w+", 0)
 
     def initX(self):
         try:
             if not len(os.environ["DISPLAY"]):
                 raise Exception("No DISPLAY variable set")
             import systray
+            systray.log = log
             self.tray = systray.SysTray()
+            log("Setup systray")
+            self.tty = self.tray.startVTE()
+            log("Setup VTE")
             self.tray.start()
             log("Setup X")
         except Exception, e:
@@ -519,7 +525,6 @@ class Client(object):
 
     def run(self):
         try:
-            print "cmd:", self.cmd
             self.pipe = subprocess.Popen(self.cmd, stdin=subprocess.PIPE,
                                          stdout=subprocess.PIPE,
                                          stderr=subprocess.PIPE, shell=True)
