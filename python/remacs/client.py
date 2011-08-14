@@ -119,8 +119,7 @@ class Client(object):
             if elem.nodeName == "notify":
                 title = elem.firstChild.firstChild.data
                 body = elem.firstChild.nextSibling.firstChild.data
-                self.tray.notify(int(elem.getAttribute("id")),
-                                 title + " : " + body)
+                self.tray.notify(elem.getAttribute("id"), title + " : " + body)
         else:
             return None
 

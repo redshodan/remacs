@@ -36,7 +36,8 @@
 ;;   <setup>
 ;;     <tty name='' term='' row='' col=''/>
 ;;     <env>
-;;     <dir>
+;;       <var>NAME=VALUE</var>
+;;     </env>
 ;;   </setup>
 ;;   <eval>str</eval>
 ;;   <msg>str</msg>
@@ -152,7 +153,7 @@ remacs or call `M-x remacs-force-delete' to forcibly disconnect it.")
     (when prev
       (setq string (concat prev string))
       (process-put proc 'previous-string nil)))
-  (condition-case err
+  ;; (condition-case err
   (progn
     (if (not (string-match "\000" string))
         ;; Save for later any partial line that remains.
@@ -166,7 +167,6 @@ remacs or call `M-x remacs-force-delete' to forcibly disconnect it.")
             xml
             frame ; The frame that was opened for the client.
             commands
-            dir
             tty-name       ; the tty name.
             tty-term       ; string.
             command-line-args-left
@@ -182,35 +182,38 @@ remacs or call `M-x remacs-force-delete' to forcibly disconnect it.")
          ;; <setup>
          ((eq (car (xml-node-name xml)) 'setup)
           (let ((tty
-                 (xml-node-name (xml-get-children (xml-node-name xml) 'tty))))
+                 (xml-node-name (xml-get-children (xml-node-name xml) 'tty)))
+                (env
+                 (xml-node-name (xml-get-children (xml-node-name xml) 'env)))
+                (envvar))
+            ;; <env>
+            (dolist (var (xml-get-children env 'var))
+              ;; XXX Variables should be encoded as in getenv/setenv.
+              (setq envvar (car (xml-node-children var)))
+              (remacs-log (format "env: %s" envvar) proc)
+              (process-put proc 'env (cons envvar (process-get proc 'env))))
+            ;; <tty>
             (setq tty-name (xml-get-attribute tty 'name)
                   tty-term (xml-get-attribute tty 'term)
                   frame (remacs-create-tty-frame tty-name tty-term proc))))
            
-           ;; ;; -eval EXPR:  Evaluate a Lisp expression.
-           ;; ((and (equal "-eval" arg)
-           ;;       command-line-args-left)
-           ;;  (lexical-let ((expr (pop command-line-args-left)))
-           ;;    (if coding-system
-           ;;        (setq expr (decode-coding-string expr coding-system)))
-           ;;    (push (lambda () (remacs-eval-and-print expr proc))
-           ;;          commands)))
-           
-           ;; ;; -env NAME=VALUE:  An environment variable.
-           ;; ((and (equal "-env" arg) command-line-args-left)
-           ;;  (let ((var (pop command-line-args-left)))
-           ;;    ;; XXX Variables should be encoded as in getenv/setenv.
-           ;;    (process-put proc 'env
-           ;;                 (cons var (process-get proc 'env)))))
-           
-           ;; ;; -msg MESSAGE:  Display a message
-           ;; ((and (equal "-msg" arg) command-line-args-left)
-           ;;  (message "remacs msg: %s" (pop command-line-args-left)))
-           
-           ;; ;; -notify-invoke ID:  Invoke a notification
-           ;; ((and (equal "-notify-invoke" arg) command-line-args-left)
-           ;;  (remacs-notify-invoke (pop command-line-args-left)))
-           
+         ;; ;; -eval EXPR:  Evaluate a Lisp expression.
+         ;; ((and (equal "-eval" arg)
+         ;;       command-line-args-left)
+         ;;  (lexical-let ((expr (pop command-line-args-left)))
+         ;;    (if coding-system
+         ;;        (setq expr (decode-coding-string expr coding-system)))
+         ;;    (push (lambda () (remacs-eval-and-print expr proc))
+         ;;          commands)))
+         
+         ;; ;; -msg MESSAGE:  Display a message
+         ;; ((and (equal "-msg" arg) command-line-args-left)
+         ;;  (message "remacs msg: %s" (pop command-line-args-left)))
+         
+         ;; ;; -notify-invoke ID:  Invoke a notification
+         ;; ((and (equal "-notify-invoke" arg) command-line-args-left)
+         ;;  (remacs-notify-invoke (pop command-line-args-left)))
+         
          ;; Unknown command.
          (t (error "Unknown command: %s" arg)))
         
@@ -220,7 +223,6 @@ remacs or call `M-x remacs-force-delete' to forcibly disconnect it.")
          (lexical-let ((proc proc)
                        (commands commands)
                        (frame frame)
-                       (dir dir)
                        (tty-name tty-name))
            (lambda ()
              (with-current-buffer (get-buffer-create remacs-buffer)
@@ -231,7 +233,7 @@ remacs or call `M-x remacs-force-delete' to forcibly disconnect it.")
         
         (remacs-execute-continuation proc))))
   ;; condition-case
-  (error (remacs-return-error proc err)))
+  ;; (error (remacs-return-error proc err)))
   )
 
 (defun remacs-goto-toplevel (proc)
