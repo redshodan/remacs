@@ -23,7 +23,7 @@
 import os, select, termios, fcntl
 
 from remacs import log
-from remacs.pipe import Pipe
+from remacs.pipe import Pipe, PipeConnLost
 
 
 class TTYManager(object):
@@ -94,13 +94,13 @@ class TTYManager(object):
                     break
                 try:
                     ret = select.select(self.ins, self.outs, [], 1.0)
-                    log("select returned: %s" % (str(ret)))
+                    # log("select returned: %s" % (str(ret)))
                 except select.error, e:
                     if e[0] == 4:
                         log("select err 4")
                         continue
                 try:
-                    self.logInOuts()
+                    # self.logInOuts()
                     for fd in self.extra_fds:
                         if fd in ret[0]:
                             self.extra_fds_cb(fd)
@@ -112,6 +112,10 @@ class TTYManager(object):
                         self.outpipe.run(True)
                     if self.fdout in ret[1]:
                         self.outpipe.run(False)
+                except PipeConnLost, e:
+                    log("Connection Lost: %s" % str(e))
+                    self.close()
+                    return
                 except Exception, e:
                     log("I/O exception: %s %s" % (type(e), str(e)))
                     import traceback

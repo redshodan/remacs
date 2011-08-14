@@ -24,7 +24,7 @@
 import os, sys, termios, struct, fcntl
 import signal, subprocess
  
-from remacs import log
+from remacs import log, dom, toxml
 from remacs.pipebuff import PipeBuff
 from remacs.ttymanager import TTYManager
 
@@ -76,7 +76,7 @@ class Client(object):
                                         str(self.pipe.stdout)))
             self.mgr = TTYManager(self.pipe.stdout.fileno(),
                                   self.pipe.stdin.fileno(),
-                                  self.tty, self.cmd_cb)
+                                  self.tty, self.cmdCB)
             self.sigWINCH()
             self.mgr.run()
         except Exception, e:
@@ -106,9 +106,23 @@ class Client(object):
             traceback.print_exc()
             print e
 
-    def cmd_cb(self, cmd, data):
+    def cmdCB(self, cmd, data):
         log("CLIENT CMD: %s DATA:%d %s" % (cmd, len(data), data))
         if cmd == PipeBuff.CMD_TTY:
             return data
+        elif cmd == PipeBuff.CMD_CMD:
+            d = dom.parseString(data)
+            elem = d.firstChild
+            if elem.nodeName == "error":
+                error = elem.firstChild.data
+                self.tray.error(error)
+            if elem.nodeName == "notify":
+                title = elem.firstChild.firstChild.data
+                body = elem.firstChild.nextSibling.firstChild.data
+                self.tray.notify(int(elem.getAttribute("id")),
+                                 title + " : " + body)
         else:
             return None
+
+    def invokeNotif(self, id):
+        log("invokeNotif: %s" % id)

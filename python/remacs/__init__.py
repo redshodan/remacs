@@ -36,3 +36,17 @@ def log(*args):
         log_file.write("%d: %s " % (time.time(), str(arg)))
     log_file.write("\n")
     log_file.flush()
+
+
+# Bleck
+from xml.dom import minidom as dom
+impl = dom.getDOMImplementation()
+d = impl.createDocument(None, None, None)
+XML_PREFIX = len(d.toxml())
+d.unlink()
+del d
+del impl
+
+
+def toxml(elem):
+    return elem.toxml()[XML_PREFIX:]

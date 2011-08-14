@@ -23,24 +23,11 @@
 
 import os, sys, pty, termios, socket, struct, fcntl
 import errno
-from xml.dom import minidom as dom
 
-from remacs import log
+from remacs import log, dom, toxml
 from remacs.pipebuff import PipeBuff
 from remacs.ttymanager import TTYManager
 
-
-# Bleck
-impl = dom.getDOMImplementation()
-d = impl.createDocument(None, None, None)
-XML_PREFIX = len(d.toxml())
-d.unlink()
-del d
-del impl
-
-
-def toxml(elem):
-    return elem.toxml()[XML_PREFIX:]
 
 class Server(object):
     def __init__(self, options):
@@ -85,7 +72,7 @@ class Server(object):
         if elem.nodeName == "emacs":
             self.emacs_pid = elem.getAttribute("pid")
             log("Emacs PID=%s" % self.emacs_pid)
-        elif elem.nodeName == "notify":
+        elif elem.nodeName in ["error", "notify"]:
             self.mgr.sendCmd(PipeBuff.CMD_CMD, buff)
         else:
             log("Invalid command from emacs")

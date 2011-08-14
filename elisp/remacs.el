@@ -152,7 +152,7 @@ remacs or call `M-x remacs-force-delete' to forcibly disconnect it.")
     (when prev
       (setq string (concat prev string))
       (process-put proc 'previous-string nil)))
-  ;;(condition-case err
+  (condition-case err
   (progn
     (if (not (string-match "\000" string))
         ;; Save for later any partial line that remains.
@@ -169,7 +169,6 @@ remacs or call `M-x remacs-force-delete' to forcibly disconnect it.")
             dir
             tty-name       ; the tty name.
             tty-term       ; string.
-            files
             command-line-args-left
             arg)
         ;; Remove this line from STRING.
@@ -185,7 +184,8 @@ remacs or call `M-x remacs-force-delete' to forcibly disconnect it.")
           (let ((tty
                  (xml-node-name (xml-get-children (xml-node-name xml) 'tty))))
             (setq tty-name (xml-get-attribute tty 'name)
-                  tty-term (xml-get-attribute tty 'term))))
+                  tty-term (xml-get-attribute tty 'term)
+                  frame (remacs-create-tty-frame tty-name tty-term proc))))
            
            ;; ;; -eval EXPR:  Evaluate a Lisp expression.
            ;; ((and (equal "-eval" arg)
@@ -203,13 +203,6 @@ remacs or call `M-x remacs-force-delete' to forcibly disconnect it.")
            ;;    (process-put proc 'env
            ;;                 (cons var (process-get proc 'env)))))
            
-           ;; ;; -dir DIRNAME:  The cwd of the emacsclient process.
-           ;; ((and (equal "-dir" arg) command-line-args-left)
-           ;;  (setq dir (pop command-line-args-left))
-           ;;  (if coding-system
-           ;;      (setq dir (decode-coding-string dir coding-system)))
-           ;;  (setq dir (command-line-normalize-file-name dir)))
-           
            ;; ;; -msg MESSAGE:  Display a message
            ;; ((and (equal "-msg" arg) command-line-args-left)
            ;;  (message "remacs msg: %s" (pop command-line-args-left)))
@@ -221,31 +214,24 @@ remacs or call `M-x remacs-force-delete' to forcibly disconnect it.")
          ;; Unknown command.
          (t (error "Unknown command: %s" arg)))
         
-        (setq frame (remacs-create-tty-frame tty-name tty-term proc))
         
         (process-put
          proc 'continuation
          (lexical-let ((proc proc)
-                       (files files)
                        (commands commands)
                        (frame frame)
                        (dir dir)
                        (tty-name tty-name))
            (lambda ()
              (with-current-buffer (get-buffer-create remacs-buffer)
-               ;; Use the same cwd as the emacsclient, if possible, so
-               ;; relative file names work correctly, even in `eval'.
-               (let ((default-directory
-                       (if (and dir (file-directory-p dir))
-                           dir default-directory)))
-                 (remacs-execute proc commands frame tty-name))))))
+                 (remacs-execute proc commands frame tty-name)))))
         
-        (when (or frame files)
+        (when frame
           (remacs-goto-toplevel proc))
         
         (remacs-execute-continuation proc))))
   ;; condition-case
-  ;;(error (remacs-return-error proc err)))
+  (error (remacs-return-error proc err)))
   )
 
 (defun remacs-goto-toplevel (proc)
@@ -435,10 +421,14 @@ remacs or call `M-x remacs-force-delete' to forcibly disconnect it.")
 
 (defun remacs-return-error (proc err)
   (ignore-errors
-    (remacs-send-string
-     proc (format "<error>%s</error>" (error-message-string err)))
-    (remacs-log (error-message-string err) proc)
+    (remacs-send-error proc err)
     (delete-process proc)))
+
+(defun remacs-send-error (proc err)
+  (when (not (stringp err))
+    (setq err (error-message-string err)))
+  (remacs-log (concat "ERROR: " err) proc)
+  (process-send-string proc (format "<error>%s</error>\000" err)))
 
 (defun remacs-send-string (proc string)
   (remacs-log (concat "Sent " string) proc)
@@ -508,6 +498,7 @@ return a new alist whose car is the new pair and cdr is ALIST."
 
 (defun remacs-test ()
   (interactive)
+  (fset 'yes-or-no-p 'y-or-n-p)
   (setq remacs-log t)
   (toggle-debug-on-error)
   (remacs-start)
@@ -518,4 +509,6 @@ return a new alist whose car is the new pair and cdr is ALIST."
 (defun remacs-notify-test ()
   (interactive)
   (remacs-notify "1 title" "1 body")
+  (dolist (proc remacs-clients)
+    (remacs-send-error proc "some error"))
   (remacs-notify "2 title" "2 body"))

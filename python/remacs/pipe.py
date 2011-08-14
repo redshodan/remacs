@@ -26,6 +26,10 @@ from remacs import log
 from remacs.pipebuff import PipeBuff
 
 
+class PipeConnLost(Exception):
+    pass
+
+
 class Pipe(object):
     def __init__(self, ins, outs, cb, decoder, encoder):
         self.ifd = None
@@ -68,7 +72,7 @@ class Pipe(object):
                     delList(self.ifd, self.ins)
                     return False
                 elif e.errno == errno.EAGAIN:
-                    log("EAGAIN")
+                    # log("EAGAIN")
                     if not self.buff.output:
                         return False
                 else:
@@ -76,7 +80,7 @@ class Pipe(object):
                         (str(self.ifd), e.errno))
                     raise
             if ((not data) or (not len(data))):
-                raise Exception("Connection lost")
+                raise PipeConnLost("Connection lost")
         if self.buff.data:
             self.buff.filterData()
         if self.buff.output:
@@ -92,7 +96,7 @@ class Pipe(object):
                     self.delList(self.ifd, self.ins)
                     return False
             if size is None:
-                raise Exception("Connection lost on write")
+                raise PipeConnLost("Connection lost on write")
             elif size > 0:
                 if size != len(self.buff.output):
                     self.insList(self.ofd, self.outs)

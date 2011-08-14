@@ -32,7 +32,7 @@ from remacs.client import Client
 
 
 if __name__ == "__main__":
-    parser = OptionParser()
+    parser = OptionParser(usage="Usage: %prog [options] <hostname>")
     parser.add_option("-s", "--server", action="store_true", dest="server",
                       default=False, help="Run in server mode")
     parser.add_option("-t", "--transport", dest="transport", default="ssh",
