@@ -42,6 +42,7 @@
 ;;   <eval>str</eval>
 ;;   <msg>str</msg>
 ;;   <notify id='12345' type='invoke|read'/>
+;;   <resume/>
 ;;
 
 (require 'cl)
@@ -201,25 +202,36 @@ remacs or call `M-x remacs-force-delete' to forcibly disconnect it.")
           (let ((id (xml-get-attribute (xml-node-name xml) 'id))
                 (type (xml-get-attribute (xml-node-name xml) 'type)))
             (when (equal type "invoke")
-              (remacs-notify-invoke id proc))))
+              (lexical-let ((id id))
+                (push (lambda ()
+                        (remacs-notify-invoke id proc))
+                      commands)))))
          ;; <msg>
          ((eq (car (xml-node-name xml)) 'msg)
-          (message "remacs message: %s"
-                   (car (xml-node-children (xml-node-name xml)))))
-
-         ;; ;; -eval EXPR:  Evaluate a Lisp expression.
-         ;; ((and (equal "-eval" arg)
-         ;;       command-line-args-left)
-         ;;  (lexical-let ((expr (pop command-line-args-left)))
-         ;;    (if coding-system
-         ;;        (setq expr (decode-coding-string expr coding-system)))
-         ;;    (push (lambda () (remacs-eval-and-print expr proc))
-         ;;          commands)))
+          (let ((msg (format "remacs message: %s"
+                             (car (xml-node-children (xml-node-name xml))))))
+            (remacs-log msg proc)
+            (message msg)))
+         ;; <resume>
+         ((eq (car (xml-node-name xml)) 'resume)
+          (remacs-log "Resuming" proc)
+          (lexical-let ((terminal (process-get proc 'terminal)))
+            (setq dontkill t)
+            (push (lambda ()
+                    (when (eq (terminal-live-p terminal) t)
+                      (resume-tty terminal)))
+                  commands)))
+         ;; <eval>
+         ((eq (car (xml-node-name xml)) 'eval)
+          (lexical-let ((expr (car (xml-node-children (xml-node-name xml)))))
+            (if coding-system
+                (setq expr (decode-coding-string expr coding-system)))
+            (push (lambda () (remacs-eval-and-print expr proc))
+                  commands)))
          
          ;; Unknown command.
          (t (error "Unknown command: %s" arg)))
-        
-        
+
         (process-put
          proc 'continuation
          (lexical-let ((proc proc)
@@ -266,17 +278,16 @@ remacs or call `M-x remacs-force-delete' to forcibly disconnect it.")
 (defun remacs-execute (proc commands frame tty-name)
   (with-local-quit
     (condition-case err
-        (mapc 'funcall (nreverse commands))
-
-      (cond
-       ((or isearch-mode (minibufferp))
-        nil)
-       (frame
-        (message "%s" (substitute-command-keys
-                       "When done with this frame, type \\[delete-frame]"))))
-      (when (and frame (null tty-name))
-        (remacs-unselect-display frame)))
-    (error (remacs-return-error proc err))))
+        (progn
+          (mapc 'funcall (nreverse commands))
+          (cond
+           ((or isearch-mode (minibufferp))
+            nil)
+           (frame
+            (message "%s"
+                     (substitute-command-keys
+                      "When done with this frame, type \\[delete-frame]")))))
+      (error (remacs-return-error proc err)))))
 
 (defun remacs-delete-client (proc &optional noframe)
   (remacs-log (concat "remacs-delete-client" (if noframe " noframe")) proc)
@@ -370,7 +381,7 @@ remacs or call `M-x remacs-force-delete' to forcibly disconnect it.")
     (process-put proc 'terminal (frame-terminal frame))
 
     ;; Display *scratch* by default.
-    (switch-to-buffer (get-buffer-create "*scratch*") 'norecord)
+    ;; (switch-to-buffer (get-buffer-create "*scratch*") 'norecord)
 
     ;; Reply with our pid.
     (remacs-send-string proc (format "<emacs pid='%d'/>" (emacs-pid)))
@@ -432,7 +443,9 @@ remacs or call `M-x remacs-force-delete' to forcibly disconnect it.")
   (when (not (stringp err))
     (setq err (error-message-string err)))
   (remacs-log (concat "ERROR: " err) proc)
-  (process-send-string proc (format "<error>%s</error>\000" err)))
+  (setq err (format "<error>%s</error>" err))
+  (remacs-log (concat "Sent " err) proc)
+  (process-send-string proc (concat err "\000")))
 
 (defun remacs-send-string (proc string)
   (remacs-log (concat "Sent " string) proc)

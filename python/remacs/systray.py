@@ -108,6 +108,10 @@ class SysTray(threading.Thread):
         self.ttywin.unmap()
         self.ttywin.map()
         self.ttywin.present()
+        self.client.resumeEmacs()
+
+    def iconify(self):
+        self.ttywin.iconify()
         
     def checkPending(self):
         if self.msgPending():

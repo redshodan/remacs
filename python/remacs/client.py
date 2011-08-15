@@ -32,6 +32,7 @@ from remacs.ttymanager import TTYManager
 class Client(object):
     def __init__(self, options):
         self.options = options
+        self.emacs_suspended = False
         self.cmd = (self.options.transport + " -T " + self.options.host +
                     " remacs --server")
         log("cmd: " + self.cmd)
@@ -116,10 +117,13 @@ class Client(object):
             if elem.nodeName == "error":
                 error = elem.firstChild.data
                 self.tray.error(error)
-            if elem.nodeName == "notify":
+            elif elem.nodeName == "notify":
                 title = elem.firstChild.firstChild.data
                 body = elem.firstChild.nextSibling.firstChild.data
                 self.tray.notify(elem.getAttribute("id"), title + " : " + body)
+            elif elem.nodeName == "suspend":
+                self.emacs_suspended = True
+                self.tray.iconify()
             d.unlink()
         else:
             return None
@@ -128,3 +132,8 @@ class Client(object):
         log("invokeNotif: %s" % id)
         self.mgr.sendCmd(PipeBuff.CMD_CMD,
                          "<notify id='%s' type='invoke'/>" % id)
+
+    def resumeEmacs(self):
+        if self.emacs_suspended:
+            self.emacs_suspended = False
+            self.mgr.sendCmd(PipeBuff.CMD_CMD, "<resume/>")
