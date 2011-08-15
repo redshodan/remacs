@@ -196,7 +196,17 @@ remacs or call `M-x remacs-force-delete' to forcibly disconnect it.")
             (setq tty-name (xml-get-attribute tty 'name)
                   tty-term (xml-get-attribute tty 'term)
                   frame (remacs-create-tty-frame tty-name tty-term proc))))
-           
+         ;; <notify>
+         ((eq (car (xml-node-name xml)) 'notify)
+          (let ((id (xml-get-attribute (xml-node-name xml) 'id))
+                (type (xml-get-attribute (xml-node-name xml) 'type)))
+            (when (equal type "invoke")
+              (remacs-notify-invoke id proc))))
+         ;; <msg>
+         ((eq (car (xml-node-name xml)) 'msg)
+          (message "remacs message: %s"
+                   (car (xml-node-children (xml-node-name xml)))))
+
          ;; ;; -eval EXPR:  Evaluate a Lisp expression.
          ;; ((and (equal "-eval" arg)
          ;;       command-line-args-left)
@@ -205,14 +215,6 @@ remacs or call `M-x remacs-force-delete' to forcibly disconnect it.")
          ;;        (setq expr (decode-coding-string expr coding-system)))
          ;;    (push (lambda () (remacs-eval-and-print expr proc))
          ;;          commands)))
-         
-         ;; ;; -msg MESSAGE:  Display a message
-         ;; ((and (equal "-msg" arg) command-line-args-left)
-         ;;  (message "remacs msg: %s" (pop command-line-args-left)))
-         
-         ;; ;; -notify-invoke ID:  Invoke a notification
-         ;; ((and (equal "-notify-invoke" arg) command-line-args-left)
-         ;;  (remacs-notify-invoke (pop command-line-args-left)))
          
          ;; Unknown command.
          (t (error "Unknown command: %s" arg)))
@@ -476,24 +478,40 @@ return a new alist whose car is the new pair and cdr is ALIST."
           (progn
             (setcdr elm value)
             alist)
-        (cons (cons key value) alist)))))
+        (cons (cons key value) alist))))
+  (defun del-alist (key alist)
+    "Delete an element whose car equals KEY from ALIST.
+Return the modified ALIST."
+    (let ((pair (assoc key alist)))
+      (if pair
+          (delq pair alist)
+        alist)))
+  (defun remove-alist (symbol key)
+    "Delete an element whose car equals KEY from the alist bound to SYMBOL."
+    (and (boundp symbol)
+         (set symbol (del-alist key (symbol-value symbol))))))
 
 (defun remacs-notify (title body &optional cb)
   (setq remacs-notify-counter (+ 1 remacs-notify-counter))
-  (set-alist 'remacs-notify-alist (symbol-value 'remacs-notify-counter)
-             `(,(symbol-value 'remacs-notify-counter) title body cb))
+  (set-alist 'remacs-notify-alist (format "%s" remacs-notify-counter)
+             (list title body cb))
   (let ((msg (format "<notify id='%d'><title>%s</title><body>%s</body></notify>"
                      remacs-notify-counter title body)))
     (dolist (proc remacs-clients)
-      (remacs-send-string proc msg))))
+      (remacs-send-string proc msg))
+    remacs-notify-counter))
 
-(defun remacs-notify-invoke (args)
-  (let ((id (cdr args))
-        (notif (get-alist id remacs-notify-alist)))
+(defun remacs-notify-invoke (id proc)
+  (let ((notif (get-alist id remacs-notify-alist)))
     (if (not notif)
-        (message (format "Failed to find notification: %s" id))
-      (remacs-log (format "invoked %s" id)))))
-
+        (remacs-send-error proc (format "Failed to find notification: %s" id))
+      (progn
+        (if (not (nth 2 notif))
+            (remacs-log (format "Clearing notification %s: %s" id notif))
+          (remacs-log (format "Invoking notification %s: %s" id notif))
+          (funcall (nth 2 notif) id))
+        (remove-alist 'remacs-notify-alist id)))))
+  
 ;;;
 ;;; Test code
 ;;;
@@ -505,12 +523,14 @@ return a new alist whose car is the new pair and cdr is ALIST."
   (toggle-debug-on-error)
   (remacs-start)
   (get-buffer-create remacs-buffer)
-  (switch-to-buffer remacs-buffer)
-  )
+  (switch-to-buffer remacs-buffer))
+
+(defun remacs-notify-test-cb (id)
+  (message "remacs-notify-test-cb: %s" id))
 
 (defun remacs-notify-test ()
   (interactive)
   (remacs-notify "1 title" "1 body")
   (dolist (proc remacs-clients)
     (remacs-send-error proc "some error"))
-  (remacs-notify "2 title" "2 body"))
+  (remacs-notify "2 title" "2 body" 'remacs-notify-test-cb))

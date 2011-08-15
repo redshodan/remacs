@@ -88,7 +88,7 @@ class PipeBuff(object):
                 log("e-nnl: %d" % length)
                 log("e-nl: %d" % socket.htonl(length))
                 output = (struct.pack("B", cmd) +
-                          struct.pack("I", socket.htonl(length)) + data)
+                          struct.pack("I", socket.htonl(length)) + str(data))
         else:
             output = struct.pack("B", cmd)
         if self.output:

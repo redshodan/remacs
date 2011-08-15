@@ -118,6 +118,8 @@ class Server(object):
                 if not self.started:
                     self.sendToEmacs(toxml(d))
                     self.started = True
+            elif elem.nodeName == "notify":
+                self.sendToEmacs(data)
             else:
                 log("Unkown command: " + data)
             d.unlink()

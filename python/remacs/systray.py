@@ -32,9 +32,9 @@ class SysTray(threading.Thread):
     def __init__(self, client):
         threading.Thread.__init__(self)
         self.client = client
+        self.icon_file = "/usr/share/icons/hicolor/scalable/apps/emacs23.svg"
         self.icon = gtk.StatusIcon()
-        self.icon.set_from_file(
-            "/usr/share/icons/hicolor/scalable/apps/emacs23.svg")
+        self.icon.set_from_file(self.icon_file)
         self.icon.connect('button_press_event', self.onBtnPress)
         self.icon.connect('activate', self.onLeftClick)
         self.icon.connect('popup-menu', self.onRightClick)
@@ -54,6 +54,7 @@ class SysTray(threading.Thread):
     def onBtnPress(self, widget, event):
         self.menu_ev_btn = event.button
         self.menu_ev_time = event.time
+        self.menu_ev_location = (event.x_root, event.y_root)
         if event.button == 2:
             self.onMiddleClick(widget, event)
 
@@ -77,7 +78,10 @@ class SysTray(threading.Thread):
                 pending = child
                 break
         if pending:
-            self.client.invokeNotif(pending.remacs_id)
+            if child.remacs_id:
+                self.client.invokeNotif(pending.remacs_id)
+            else:
+                self.showErrorDialog(pending.get_label())
             pending.set_sensitive(False)
             if not self.ttywin.is_active():
                 self.raiseWindow()
@@ -94,7 +98,7 @@ class SysTray(threading.Thread):
 
     def onMenuMsg(self, widget):
         widget.set_sensitive(False)
-        if hasattr(widget, "remacs_id"):
+        if widget.remacs_id:
             self.client.invokeNotif(widget.remacs_id)
             if not self.ttywin.is_active():
                 self.raiseWindow()
@@ -135,7 +139,13 @@ class SysTray(threading.Thread):
         item.connect("activate", self.onMenuMsg)
         item.show()
         self.icon.set_blinking(True)
-    
+
+    def showErrorDialog(self, msg):
+        dialog = gtk.MessageDialog(buttons=gtk.BUTTONS_OK)
+        dialog.set_markup(msg)
+        dialog.run()
+        dialog.destroy()
+
     def startVTE(self):
         import ttywindow
         self.ttywin = ttywindow.TTYWindow(self)

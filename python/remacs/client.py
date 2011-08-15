@@ -120,8 +120,11 @@ class Client(object):
                 title = elem.firstChild.firstChild.data
                 body = elem.firstChild.nextSibling.firstChild.data
                 self.tray.notify(elem.getAttribute("id"), title + " : " + body)
+            d.unlink()
         else:
             return None
 
     def invokeNotif(self, id):
         log("invokeNotif: %s" % id)
+        self.mgr.sendCmd(PipeBuff.CMD_CMD,
+                         "<notify id='%s' type='invoke'/>" % id)

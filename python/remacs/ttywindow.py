@@ -40,6 +40,8 @@ class TTYWindow(gtk.Window):
         self.show_all()
         self.pair = pty.openpty()
         self.tty.set_pty(self.pair[0])
-
+        self.icon_file = "/usr/share/icons/hicolor/48x48/apps/emacs23.png"
+        self.set_icon(gtk.gdk.pixbuf_new_from_file(self.icon_file))
+    
     def onQuit(self, obj):
         self.systray.onQuit(None)
