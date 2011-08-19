@@ -59,11 +59,11 @@ def init(name):
 
     # Main logger
     logger = logging.getLogger(name)
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(VERBOSE)
     handler = RotatingFileHandler("log-" + name)
     formatter = logging.Formatter(FORMAT)
     handler.setFormatter(formatter)
     logger.addHandler(handler)
 
-
-__all__ = ["debug", "verb", "info", "warn", "error", "crit", "exception", "init"]
+    info("*******************************************************************")
+    info("Started " + name)
