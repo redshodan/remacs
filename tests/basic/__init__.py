@@ -21,28 +21,4 @@
 #
 
 
-import os
-import pty, gtk, vte
-
-import remacs
-
-
-class TTYWindow(gtk.Window):
-    def __init__(self, systray):
-        gtk.Window.__init__(self)
-        self.systray = systray
-        self.set_title("remacs")
-        self.connect('destroy', self.onQuit)
-        self.tty = vte.Terminal()
-        self.tty.set_cursor_blinks(True)
-        self.tty.set_emulation("xterm")
-        self.tty.connect('eof', self.onQuit)
-        self.add(self.tty)
-        self.show_all()
-        self.pair = pty.openpty()
-        self.tty.set_pty(self.pair[0])
-        self.icon_file = os.path.join(remacs.home, "share/emacs23.png")
-        self.set_icon(gtk.gdk.pixbuf_new_from_file(self.icon_file))
-    
-    def onQuit(self, obj):
-        self.systray.onQuit(None)
+from .basic import *

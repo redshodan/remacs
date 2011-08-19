@@ -24,6 +24,9 @@
 from . import log
 
 
+home = None
+
+
 # Bleck
 from xml.dom import minidom as dom
 impl = dom.getDOMImplementation()
@@ -36,3 +39,8 @@ del impl
 
 def toxml(elem):
     return elem.toxml()[XML_PREFIX:]
+
+
+def init(path):
+    global home
+    home = path

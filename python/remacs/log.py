@@ -60,7 +60,7 @@ def init(name):
     # Main logger
     logger = logging.getLogger(name)
     logger.setLevel(VERBOSE)
-    handler = RotatingFileHandler("log-" + name)
+    handler = RotatingFileHandler(name + ".log")
     formatter = logging.Formatter(FORMAT)
     handler.setFormatter(formatter)
     logger.addHandler(handler)

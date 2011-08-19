@@ -1,6 +1,6 @@
-log-server
-log-client
+server.log
+client.log
 android/bin
 android/gen
 android/local.properties
-.*\.pyc
+build

@@ -23,13 +23,16 @@
 
 import sys, os, threading, pty
 import gtk, gobject
-from . import log
+
+import remacs
+from remacs import log
+
 
 class SysTray(threading.Thread):
     def __init__(self, client):
         threading.Thread.__init__(self)
         self.client = client
-        self.icon_file = "/usr/share/icons/hicolor/scalable/apps/emacs23.svg"
+        self.icon_file = os.path.join(remacs.home, "share/emacs23.svg")
         self.icon = gtk.StatusIcon()
         self.icon.set_from_file(self.icon_file)
         self.icon.connect('button_press_event', self.onBtnPress)

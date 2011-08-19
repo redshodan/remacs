@@ -21,28 +21,29 @@
 #
 
 
-import os
-import pty, gtk, vte
+import os, sys
+if os.path.islink(__file__):
+    path = os.path.dirname(os.readlink(__file__))
+else:
+    path = os.path.dirname(__file__)
+sys.path = [os.path.abspath(os.path.join(path, "../python"))] + sys.path
+del path
 
-import remacs
+import unittest
+from test import test_support
+import utils
+
+### Add test modules/packages here
+import basic
+test_modules = [basic]
 
 
-class TTYWindow(gtk.Window):
-    def __init__(self, systray):
-        gtk.Window.__init__(self)
-        self.systray = systray
-        self.set_title("remacs")
-        self.connect('destroy', self.onQuit)
-        self.tty = vte.Terminal()
-        self.tty.set_cursor_blinks(True)
-        self.tty.set_emulation("xterm")
-        self.tty.connect('eof', self.onQuit)
-        self.add(self.tty)
-        self.show_all()
-        self.pair = pty.openpty()
-        self.tty.set_pty(self.pair[0])
-        self.icon_file = os.path.join(remacs.home, "share/emacs23.png")
-        self.set_icon(gtk.gdk.pixbuf_new_from_file(self.icon_file))
-    
-    def onQuit(self, obj):
-        self.systray.onQuit(None)
+utils.init()
+
+print "Running tests..."
+print "----------------------------------------------------------------------"
+print
+ts = unittest.TestSuite()
+for module in test_modules:
+    ts.addTests(unittest.defaultTestLoader.loadTestsFromModule(module))
+test_support.run_unittest(ts)
