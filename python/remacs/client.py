@@ -134,6 +134,11 @@ class Client(object):
         self.mgr.sendCmd(PipeBuff.CMD_CMD,
                          "<notify id='%s' type='invoke'/>" % id)
 
+    def readNotif(self, id):
+        log.info("readNotif: %s" % id)
+        self.mgr.sendCmd(PipeBuff.CMD_CMD,
+                         "<notify id='%s' type='read'/>" % id)
+
     def resumeEmacs(self):
         if self.emacs_suspended:
             self.emacs_suspended = False

@@ -201,11 +201,12 @@ remacs or call `M-x remacs-force-delete' to forcibly disconnect it.")
          ((eq (car (xml-node-name xml)) 'notify)
           (let ((id (xml-get-attribute (xml-node-name xml) 'id))
                 (type (xml-get-attribute (xml-node-name xml) 'type)))
-            (when (equal type "invoke")
-              (lexical-let ((id id))
-                (push (lambda ()
-                        (remacs-notify-invoke id proc))
-                      commands)))))
+            (lexical-let ((id id)
+                          (type type))
+              (push (lambda ()
+                      (remacs-notify-invoke id proc
+                                            (not (equal type "invoke"))))
+                    commands))))
          ;; <msg>
          ((eq (car (xml-node-name xml)) 'msg)
           (let ((msg (format "remacs message: %s"
@@ -514,17 +515,17 @@ Return the modified ALIST."
       (remacs-send-string proc msg))
     remacs-notify-counter))
 
-(defun remacs-notify-invoke (id proc)
+(defun remacs-notify-invoke (id proc ack-only)
   (let ((notif (get-alist id remacs-notify-alist)))
     (if (not notif)
         (remacs-send-error proc (format "Failed to find notification: %s" id))
       (progn
-        (if (not (nth 2 notif))
+        (if (or ack-only (not (nth 2 notif)))
             (remacs-log (format "Clearing notification %s: %s" id notif))
           (remacs-log (format "Invoking notification %s: %s" id notif))
           (funcall (nth 2 notif) id))
         (remove-alist 'remacs-notify-alist id)))))
-  
+
 ;;;
 ;;; Test code
 ;;;

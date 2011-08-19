@@ -1,0 +1,12 @@
+- acking:
+  - ack cmds
+  - on con lost:
+    - resend un-acked cmds
+    - redraw tty
+
+- xmpp-ish protocol:
+  - type=set/get/result
+    - notify's have type=result with optional <invoke> child
+  - to/from addressing:
+    - server have id's
+    - clients have id's like: client.server

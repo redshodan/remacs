@@ -78,13 +78,16 @@ class SysTray(threading.Thread):
                 pending = child
                 break
         if pending:
+            if not self.ttywin.is_active():
+                self.raiseWindow()
             if child.remacs_id:
-                self.client.invokeNotif(pending.remacs_id)
+                if event.get_state() & gtk.gdk.SHIFT_MASK:
+                    self.client.readNotif(pending.remacs_id)
+                else:
+                    self.client.invokeNotif(pending.remacs_id)
             else:
                 self.showErrorDialog(pending.get_label())
             pending.set_sensitive(False)
-            if not self.ttywin.is_active():
-                self.raiseWindow()
         self.checkPending()
     
     def onRightClick(self, widget, event_button, event_time):
