@@ -35,18 +35,18 @@ class Client(object):
         self.emacs_suspended = False
         self.cmd = (self.options.transport + " -T " + self.options.host +
                     " remacs --server")
-        log("cmd: " + self.cmd)
+        log.info("cmd: " + self.cmd)
         if "TERM" in os.environ:
             self.term = os.environ["TERM"]
         else:
             self.term = "xterm"
         self.tty = None
         if self.options.no_x:
-            log("User disabled X")
+            log.info("User disabled X")
         else:
             self.initX()
         if self.tty is None:
-            log("No VTE setup, continuing on stdin")
+            log.info("No VTE setup, continuing on stdin")
             self.tty = os.open(os.ttyname(sys.stdin.fileno()), os.O_RDWR)
 
     def initX(self):
@@ -54,15 +54,14 @@ class Client(object):
             if not len(os.environ["DISPLAY"]):
                 raise Exception("No DISPLAY variable set")
             from remacs import systray
-            systray.log = log
             self.tray = systray.SysTray(self)
-            log("Setup systray")
+            log.info("Setup systray")
             self.tty = self.tray.startVTE()
-            log("Setup VTE, tty: %s" % self.tty)
+            log.info("Setup VTE, tty: %s" % self.tty)
             self.tray.start()
-            log("Setup X")
+            log.info("Setup X")
         except Exception, e:
-            log("Failed to setup X interface: " + str(e))
+            log.exception("Failed to setup X interface: " + str(e))
 
     def run(self):
         try:
@@ -71,24 +70,24 @@ class Client(object):
                                          stderr=subprocess.PIPE, shell=True)
 
             signal.signal(signal.SIGWINCH, self.sigWINCH)
-            log("pipe.stdin: %d %s" % (self.pipe.stdin.fileno(),
-                                       str(self.pipe.stdin)))
-            log("pipe.stdout: %d %s" % (self.pipe.stdout.fileno(),
-                                        str(self.pipe.stdout)))
+            log.debug("pipe.stdin: %d %s" % (self.pipe.stdin.fileno(),
+                                             str(self.pipe.stdin)))
+            log.debug("pipe.stdout: %d %s" % (self.pipe.stdout.fileno(),
+                                              str(self.pipe.stdout)))
             self.mgr = TTYManager(self.pipe.stdout.fileno(),
                                   self.pipe.stdin.fileno(),
                                   self.tty, self.cmdCB)
             self.sigWINCH()
             self.mgr.run()
         except Exception, e:
-            print "Main loop exception: %s %s" % (type(e), str(e))
+            log.exception("Main loop exception: %s" % str(e))
             import traceback
             traceback.print_exc()
         finally:
             self.mgr.close()
 
     def quit(self):
-        log("Client.quit")
+        log.info("Client.quit")
         self.mgr.quit()
 
     def sigWINCH(self, signum=None, frame=None):
@@ -96,19 +95,19 @@ class Client(object):
             buff = 'abcdefgh'
             buff = fcntl.ioctl(self.tty, termios.TIOCGWINSZ, buff)
             (row, col, x, y) = struct.unpack("HHHH", buff)
-            log("winsize %d: %s" % (len(buff), buff))
+            log.verb("winsize %d: %s" % (len(buff), buff))
             self.mgr.sendCmd(
                 PipeBuff.CMD_CMD,
                 "<setup><tty term='%s' row='%d' col='%d'/></setup>" %
                 (self.term, row, col))
         except Exception, e:
-            log("sigWINCH: %s" % str(e))
+            log.exception("sigWINCH: %s" % str(e))
             import traceback
             traceback.print_exc()
             print e
 
     def cmdCB(self, cmd, data):
-        log("CLIENT CMD: %s DATA:%d %s" % (cmd, len(data), data))
+        log.verb("CLIENT CMD: %s DATA:%d %s" % (cmd, len(data), data))
         if cmd == PipeBuff.CMD_TTY:
             return data
         elif cmd == PipeBuff.CMD_CMD:
@@ -124,12 +123,14 @@ class Client(object):
             elif elem.nodeName == "suspend":
                 self.emacs_suspended = True
                 self.tray.iconify()
+            else:
+                log.err("Unkown command: " + data)
             d.unlink()
         else:
             return None
 
     def invokeNotif(self, id):
-        log("invokeNotif: %s" % id)
+        log.info("invokeNotif: %s" % id)
         self.mgr.sendCmd(PipeBuff.CMD_CMD,
                          "<notify id='%s' type='invoke'/>" % id)
 

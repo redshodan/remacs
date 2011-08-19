@@ -64,29 +64,29 @@ class PipeBuff(object):
             if self.encoder:
                 self.encodeCmd(self.CMD_TTY, self.data)
                 self.data = None
-                log("encoded buff: %s" % self.output)
+                log.debug("encoded buff: %s" % self.output)
             else:
-                log("output buff: %s" % self.output)
+                log.debug("output buff: %s" % self.output)
                 if self.output:
                     self.output = self.output + data
                 else:
                     self.output = self.data
                 self.data = None
-                log("output buff: %s" % self.output)
+                log.debug("output buff: %s" % self.output)
 
     def encodeCmd(self, cmd, data):
-        log("encodeCmd:%d %s" % (cmd, data))
+        log.debug("encodeCmd:%d %s" % (cmd, data))
         if data:
             length = len(data)
-            log("length=%d" % length)
+            log.debug("length=%d" % length)
             if length <= self.CMD_SIZE_MAX:
                 cmd = cmd + (length << 3)
-                log("cmd: %d" % cmd)
+                log.debug("cmd: %d" % cmd)
                 output = struct.pack("B", cmd) + data
             else:
                 cmd = cmd + self.CMD_SIZE_MAXED
-                log("e-nnl: %d" % length)
-                log("e-nl: %d" % socket.htonl(length))
+                log.debug("e-nnl: %d" % length)
+                log.debug("e-nl: %d" % socket.htonl(length))
                 output = (struct.pack("B", cmd) +
                           struct.pack("I", socket.htonl(length)) + str(data))
         else:
@@ -97,16 +97,16 @@ class PipeBuff(object):
             self.output = output
 
     def decodeCmd(self):
-        log("Starting decodeCmd: data len: %d" % len(self.data))
+        log.debug("Starting decodeCmd: data len: %d" % len(self.data))
         if self.cmd == self.CMD_NONE:
             self.cmd = struct.unpack("B", self.data[0])[0]
             self.data = self.data[1:]
-            log("unpacked cmd: %d" % self.cmd)
-            log("data len: %d" % len(self.data))
+            log.debug("unpacked cmd: %d" % self.cmd)
+            log.debug("data len: %d" % len(self.data))
         if self.length == -1:
             if self.cmd & self.CMD_SIZE_MAXED:
                 if len(self.data) < 4:
-                    log("dont have enough for length")
+                    log.debug("dont have enough for length")
                     return False
                 self.length = struct.unpack("I", self.data[:4])[0]
                 self.length = socket.ntohl(self.length)
@@ -114,18 +114,18 @@ class PipeBuff(object):
             else:
                 self.length = self.cmd >> 3
             self.cmd = self.cmd & self.CMD_CMDS
-            log("setting cmd to: %d" % self.cmd)
+            log.debug("setting cmd to: %d" % self.cmd)
         cmd = self.cmd
         ret = False
         cmd_data = None
         if len(self.data) == self.length:
-            log("data and length same size")
+            log.debug("data and length same size")
             cmd_data = self.data
             self.data = None
             self.cmd = self.CMD_NONE
             self.length = -1
         elif len(self.data) > self.length:
-            log("extra data: length=%d data len=%d" %
+            log.debug("extra data: length=%d data len=%d" %
                 (self.length, len(self.data)))
             cmd_data = self.data[:self.length]
             self.data = self.data[self.length:]
@@ -139,21 +139,21 @@ class PipeBuff(object):
                 self.output = self.output + cmd_data
             else:
                 self.output = cmd_data
-        log("decoded length: %d self.cmd: %d cmd: %d" %
+        log.debug("decoded length: %d self.cmd: %d cmd: %d" %
             (self.length, self.cmd, cmd))
-        log("decoded data: %s" % self.data)
+        log.debug("decoded data: %s" % self.data)
         if self.data:
-            log("decoded data len: %d" % len(self.data))
-        log("decoded output: %s" % self.output)
+            log.debug("decoded data len: %d" % len(self.data))
+        log.debug("decoded output: %s" % self.output)
         if self.output:
-            log("output len: %d" % len(self.output))
-        log("decoded cmd_data: %s" % cmd_data)
+            log.debug("output len: %d" % len(self.output))
+        log.debug("decoded cmd_data: %s" % cmd_data)
         if cmd_data:
-            log("cmd_data len: %d" % len(cmd_data))
+            log.debug("cmd_data len: %d" % len(cmd_data))
         if ret:
-            log("Recursing decodeCmd")
+            log.debug("Recursing decodeCmd")
             return self.decodeCmd()
         else:
-            log("Leaving decodeCmd")
+            log.debug("Leaving decodeCmd")
             return ret
 

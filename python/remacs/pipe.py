@@ -53,30 +53,30 @@ class Pipe(object):
             pass
         
     def _run(self, do_read):
-        log("Pipe.run(%s)" % str(do_read))
+        log.debug("Pipe.run(%s)" % str(do_read))
         if do_read:
             data = None
             try:
-                log("starting read(%s)" % str(self.ifd))
+                log.debug("starting read(%s)" % str(self.ifd))
                 data = os.read(self.ifd, 1024)
                 if data and len(data):
                     if self.buff.data:
                         self.buff.data = self.buff.data + data
                     else:
                         self.buff.data = data
-                log("read(%s): %s %s" % (str(self.ifd), len(data), data))
+                log.debug("read(%s): %s %s" % (str(self.ifd), len(data), data))
             except OSError, e:
-                # log("read(%s): EXC: %s" % (str(self.ifd), str(e)))
+                # log.debug("read(%s): EXC: %s" % (str(self.ifd), str(e)))
                 if e.errno == errno.EIO:
-                    log("read(%s): EXC: %s" % (str(self.ifd), "EIO"))
+                    log.debug("read(%s): EXC: %s" % (str(self.ifd), "EIO"))
                     delList(self.ifd, self.ins)
                     return False
                 elif e.errno == errno.EAGAIN:
-                    # log("EAGAIN")
+                    # log.debug("EAGAIN")
                     if not self.buff.output:
                         return False
                 else:
-                    log("read(%s): EXC: %s:%d" %
+                    log.debug("read(%s): EXC: %s:%d" %
                         (str(self.ifd), e.errno))
                     raise
             if ((not data) or (not len(data))):
@@ -85,13 +85,13 @@ class Pipe(object):
             self.buff.filterData()
         if self.buff.output:
             try:
-                log("write(%s) %s" % (str(self.ofd), self.buff.output))
+                log.debug("write(%s) %s" % (str(self.ofd), self.buff.output))
                 size = os.write(self.ofd, self.buff.output)
-                log("write(%s) size %s" % (str(self.ofd), str(size)))
+                log.debug("write(%s) size %s" % (str(self.ofd), str(size)))
             except OSError, e:
-                log("write(%s): EXC %s" % (str(self.ofd), str(e)))
+                log.debug("write(%s): EXC %s" % (str(self.ofd), str(e)))
                 if e.errno == errno.EAGAIN:
-                    log("write(%s): EXC %s" % (str(self.ofd), "EAGAIN"))
+                    log.debug("write(%s): EXC %s" % (str(self.ofd), "EAGAIN"))
                     self.insList(self.ofd, self.outs)
                     self.delList(self.ifd, self.ins)
                     return False
@@ -102,11 +102,11 @@ class Pipe(object):
                     self.insList(self.ofd, self.outs)
                     self.delList(self.ifd, self.ins)
                     self.buff.output = self.buff.output[size:]
-                    log("write(%s): %s partial %s" % (str(self.ofd),
+                    log.debug("write(%s): %s partial %s" % (str(self.ofd),
                                                       str(size), self.buff.output))
                     return False
                 else:
-                    log("write(%s): reset" % str(self.ofd))
+                    log.debug("write(%s): reset" % str(self.ofd))
                     self.buff.output = None
                     self.insList(self.ifd, self.ins)
                     self.delList(self.ofd, self.outs)

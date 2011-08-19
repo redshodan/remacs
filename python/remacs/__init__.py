@@ -21,21 +21,7 @@
 #
 
 
-import time
-
-
-log_file = None
-
-
-def initLog(name):
-    global log_file
-    log_file = open("log" + "-" + name, "w+")
-
-def log(*args):
-    for arg in args:
-        log_file.write("%d: %s " % (time.time(), str(arg)))
-    log_file.write("\n")
-    log_file.flush()
+from . import log
 
 
 # Bleck

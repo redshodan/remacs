@@ -23,10 +23,7 @@
 
 import sys, os, threading, pty
 import gtk, gobject
-
-
-log = None
-
+from . import log
 
 class SysTray(threading.Thread):
     def __init__(self, client):
@@ -92,7 +89,7 @@ class SysTray(threading.Thread):
         self.checkPending()
 
     def onQuit(self, widget):
-        log("Menu quit")
+        log.info("Menu quit")
         gtk.main_quit()
         self.client.quit()
 

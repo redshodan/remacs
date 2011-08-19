@@ -70,7 +70,7 @@ class TTYManager(object):
         new[1] = new[1] & ~termios.OPOST
         termios.tcsetattr(self.tty, termios.TCSANOW, new)
 
-        log("fds: fdin=%d fdout=%d tty=%s" %
+        log.debug("fds: fdin=%d fdout=%d tty=%s" %
             (self.fdin, self.fdout, self.tty))
         
         fcntl.fcntl(self.tty, fcntl.F_SETFL, os.O_NONBLOCK)
@@ -85,7 +85,7 @@ class TTYManager(object):
         self.outpipe.setPipes(self.tty, self.fdout)
 
     def run(self):
-        log("Starting TTYManager.run()")
+        log.debug("Starting TTYManager.run()")
         try:
             while self.running and (len(self.ins) or len(self.outs)):
                 if ((len(self.ins) == 1) and (self.ins[0] == self.fdin) and
@@ -94,10 +94,10 @@ class TTYManager(object):
                     break
                 try:
                     ret = select.select(self.ins, self.outs, [], 1.0)
-                    # log("select returned: %s" % (str(ret)))
+                    # log.debug("select returned: %s" % (str(ret)))
                 except select.error, e:
                     if e[0] == 4:
-                        log("select err 4")
+                        log.debug("select err 4")
                         continue
                 try:
                     # self.logInOuts()
@@ -113,17 +113,17 @@ class TTYManager(object):
                     if self.fdout in ret[1]:
                         self.outpipe.run(False)
                 except PipeConnLost, e:
-                    log("Connection Lost: %s" % str(e))
+                    log.exception("Connection Lost: %s" % str(e))
                     self.close()
                     return
                 except Exception, e:
-                    log("I/O exception: %s %s" % (type(e), str(e)))
+                    log.exception("I/O exception: %s %s" % (type(e), str(e)))
                     import traceback
-                    log(traceback.format_exc())
+                    log.debug(traceback.format_exc())
                     self.close()
                     return
         except Exception, e:
-            log("Main loop exception: %s %s" % (type(e), str(e)))
+            log.exception("Main loop exception: %s %s" % (type(e), str(e)))
             import traceback
             traceback.print_exc()
             raise
@@ -139,16 +139,16 @@ class TTYManager(object):
                 msg = "%s, %s" % (msg, str(fd))
             else:
                 msg = "%s" % str(fd)
-        log("ins: %s" % msg)
+        log.debug("ins: %s" % msg)
         msg = ""
         for fd in self.outs:
             if len(msg):
                 msg = "%s, %s" % (msg, str(fd))
             else:
                 msg = "%s" % str(fd)
-        log("outs: %s" % msg)
-        log("IN: %s" % self.inpipe.buff.toStr())
-        log("OUT: %s" % self.outpipe.buff.toStr())
+        log.debug("outs: %s" % msg)
+        log.debug("IN: %s" % self.inpipe.buff.toStr())
+        log.debug("OUT: %s" % self.outpipe.buff.toStr())
 
     def sendCmd(self, cmd, data):
         self.outpipe.sendCmd(cmd, data)

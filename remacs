@@ -26,7 +26,7 @@ from optparse import OptionParser
 
 sys.path.append("/home/baron/src/remacs/python")
 
-from remacs import initLog, log
+from remacs import log
 from remacs.server import Server
 from remacs.client import Client
 
@@ -42,13 +42,13 @@ if __name__ == "__main__":
     (options, args) = parser.parse_args()
 
     if options.server:
-        initLog("server")
+        log.init("server")
         server = Server(options)
         server.run()
     elif len(args) != 1:
         parser.print_help()
     else:
-        initLog("client")
+        log.init("client")
         options.host = args[0]
         client = Client(options)
         client.run()

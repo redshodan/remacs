@@ -41,11 +41,11 @@ class Server(object):
         try:
             self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
             self.sock.connect("/tmp/remacs%d/remacs" % os.geteuid())
-            log("connected to emacs server")
+            log.info("connected to emacs server")
             self.sock.setblocking(0)
-            log("sock fd=%d" % self.sock.fileno())
+            log.debug("sock fd=%d" % self.sock.fileno())
             self.pipe = self.sock.fileno()
-            log("sock pipe fd: %d" % self.pipe)
+            log.debug("sock pipe fd: %d" % self.pipe)
             (self.tty, self.slave) = pty.openpty()
             fcntl.ioctl(self.tty, termios.TIOCSWINSZ,
                         struct.pack("HHHH", 24, 80, 0, 0))
@@ -62,34 +62,34 @@ class Server(object):
 
     def sendToEmacs(self, cmd):
         buff = cmd + "\000"
-        log("sendToEmacs:" + buff)
+        log.verb("sendToEmacs:" + buff)
         os.write(self.pipe, buff)
 
     def receivedFromEmacs(self, buff):
-        log("Received from emacs: %s" % buff)
+        log.verb("Received from emacs: %s" % buff)
         d = dom.parseString(buff)
         elem = d.firstChild
         if elem.nodeName == "emacs":
             self.emacs_pid = elem.getAttribute("pid")
-            log("Emacs PID=%s" % self.emacs_pid)
+            log.info("Emacs PID=%s" % self.emacs_pid)
         elif elem.nodeName in ["error", "notify", "suspend"]:
             self.mgr.sendCmd(PipeBuff.CMD_CMD, buff)
         else:
-            log("Invalid command from emacs")
+            log.error("Invalid command from emacs")
         d.unlink()
 
     def pipe_cb(self, fd):
-        log("pipe_cb")
+        log.debug("pipe_cb")
         buff = None
         try:
             buff = os.read(self.pipe, 4096)
-            log("pipe_cb: read: %d: %s" % (len(buff), buff))
+            log.debug("pipe_cb: read: %d: %s" % (len(buff), buff))
         except OSError, e:
             if e.errno == errno.EAGAIN:
-                log("pipe_cb: EAGAIN")
+                log.debug("pipe_cb: EAGAIN")
                 return
             else:
-                log("pipe_cb: EXCEPT: %s" % e)
+                log.exception("pipe_cb: EXCEPT: %s" % e)
                 raise
         if buff:
             for line in buff.split("\000"):
@@ -99,7 +99,7 @@ class Server(object):
             raise Exception("Lost connection to emacs")
         
     def cmd_cb(self, cmd, data):
-        log("SERVER CMD: %s DATA: %s" % (cmd, data))
+        log.verb("SERVER CMD: %s DATA: %s" % (cmd, data))
         if cmd == PipeBuff.CMD_TTY:
             return data
         elif cmd == PipeBuff.CMD_CMD:
@@ -112,7 +112,7 @@ class Server(object):
                     row = int(tty.getAttribute("row"))
                     col = int(tty.getAttribute("col"))
                     buff = struct.pack("HHHH", row, col, 0, 0)
-                    log("Setting winsize: %s %s" % (row, col))
+                    log.verb("Setting winsize: %s %s" % (row, col))
                     fcntl.ioctl(self.tty, termios.TIOCSWINSZ, buff)
                     tty.setAttribute("name", os.ttyname(self.slave))
                 if not self.started:
@@ -123,5 +123,5 @@ class Server(object):
             elif elem.nodeName == "resume":
                 self.sendToEmacs(data)
             else:
-                log("Unkown command: " + data)
+                log.err("Unkown command: " + data)
             d.unlink()
