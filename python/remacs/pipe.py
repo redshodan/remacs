@@ -46,7 +46,8 @@ class Pipe(object):
     def sendCmd(self, cmd, data):
         self.buff.encodeCmd(cmd, data)
         self.insList(self.ofd, self.outs)
-        self.delList(self.ifd, self.ins)
+        # FIXME: remove after it works for a while
+        # self.delList(self.ifd, self.ins)
 
     def run(self, do_read):
         while self._run(do_read):
@@ -93,23 +94,27 @@ class Pipe(object):
                 if e.errno == errno.EAGAIN:
                     log.debug("write(%s): EXC %s" % (str(self.ofd), "EAGAIN"))
                     self.insList(self.ofd, self.outs)
-                    self.delList(self.ifd, self.ins)
+                    # FIXME: remove after it works for a while
+                    # self.delList(self.ifd, self.ins)
                     return False
             if size is None:
                 raise PipeConnLost("Connection lost on write")
             elif size > 0:
                 if size != len(self.buff.output):
                     self.insList(self.ofd, self.outs)
-                    self.delList(self.ifd, self.ins)
+                    # FIXME: remove after it works for a while
+                    # self.delList(self.ifd, self.ins)
                     self.buff.output = self.buff.output[size:]
                     log.debug("write(%s): %s partial %s" % (str(self.ofd),
-                                                      str(size), self.buff.output))
+                                                            str(size),
+                                                            self.buff.output))
                     return False
                 else:
                     log.debug("write(%s): reset" % str(self.ofd))
                     self.buff.output = None
                     self.insList(self.ifd, self.ins)
-                    self.delList(self.ofd, self.outs)
+                    # FIXME: remove after it works for a while
+                    # self.delList(self.ofd, self.outs)
 
         if do_read:
             return True

@@ -75,7 +75,10 @@ class PipeBuff(object):
                 log.debug("output buff: %s" % self.output)
 
     def encodeCmd(self, cmd, data):
-        log.debug("encodeCmd:%d %s" % (cmd, data))
+        if cmd == self.CMD_TTY:
+            log.debug("encodeCmd:%d %s" % (cmd, data))
+        else:
+            log.verb("encodeCmd:%d %s" % (cmd, data))
         if data:
             length = len(data)
             log.debug("length=%d" % length)
@@ -150,6 +153,8 @@ class PipeBuff(object):
         log.debug("decoded cmd_data: %s" % cmd_data)
         if cmd_data:
             log.debug("cmd_data len: %d" % len(cmd_data))
+            if cmd != self.CMD_TTY:
+                log.verb("decoded data: %s" % cmd_data)
         if ret:
             log.debug("Recursing decodeCmd")
             return self.decodeCmd()

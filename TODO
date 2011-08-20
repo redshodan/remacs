@@ -5,6 +5,7 @@
     - redraw tty
 
 - xmpp-ish protocol:
+  - from, broadcast only for now.
   - type=set/get/result
     - notify's have type=result with optional <invoke> child
   - to/from addressing:

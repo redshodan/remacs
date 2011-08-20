@@ -25,7 +25,11 @@ build: $(BDIRS) python debug
 $(BDIRS):
 	mkdir -p $@
 
-python: $(BDIRS) $(OBJS)
+python: $(BDIRS) $(OBJS) idle
+
+idle: $(BUILD)/remacs/idle.so
+$(BUILD)/remacs/idle.so: lib/idle.c
+	gcc -shared -fPIC -Wall -I /usr/include/python2.6 lib/idle.c -lpython2.6 -lX11 -lXss -o $(BUILD)/remacs/idle.so
 
 tests: $(BDIRS) clean-run python $(TOBJS)
 	(cd build/runs; python ../tests/run.pyc)
@@ -64,4 +68,4 @@ $(BUILD)/%.pyc: python/%.py
 build/tests/%.pyc: tests/%.py
 	python -c "import sys, py_compile; py_compile.compile(sys.argv[1], sys.argv[2], doraise=True)" $< $@
 
-.PHONY: build python tests clean-run
+.PHONY: build python idle tests clean-run

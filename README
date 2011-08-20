@@ -1,0 +1,3 @@
+Ubuntu pre-reqs:
+
+sudo apt-get install libxtst-dev libxss-dev
