@@ -22,16 +22,18 @@
 
 
 import sys, os, threading, pty
-import gtk, gobject
+import gtk
 
 import remacs
-from remacs import log
+from remacs import log, xidler
 
 
 class SysTray(threading.Thread):
     def __init__(self, client):
         threading.Thread.__init__(self)
         self.client = client
+
+    def run(self):
         self.icon_file = os.path.join(remacs.home, "share/emacs23.svg")
         self.icon = gtk.StatusIcon()
         self.icon.set_from_file(self.icon_file)
@@ -39,6 +41,10 @@ class SysTray(threading.Thread):
         self.icon.connect('activate', self.onLeftClick)
         self.icon.connect('popup-menu', self.onRightClick)
         self.buildMenu()
+        self.xidler = xidler.XIdler(self, self.client)
+        self.xidler.start()
+        gtk.gdk.threads_init()
+        gtk.main()
 
     def buildMenu(self):
         self.menu_sep = None
@@ -167,7 +173,3 @@ class SysTray(threading.Thread):
         import ttywindow
         self.ttywin = ttywindow.TTYWindow(self)
         return self.ttywin.pair[1]
-
-    def run(self):
-        gtk.gdk.threads_init()
-        gtk.main()

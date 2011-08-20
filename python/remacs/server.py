@@ -72,7 +72,7 @@ class Server(object):
         if elem.nodeName == "emacs":
             self.emacs_pid = elem.getAttribute("pid")
             log.info("Emacs PID=%s" % self.emacs_pid)
-        elif elem.nodeName in ["error", "notify", "suspend"]:
+        elif elem.nodeName in ["error", "notify", "suspend", "unidle"]:
             self.mgr.sendCmd(PipeBuff.CMD_CMD, buff)
         else:
             log.error("Invalid command from emacs")
@@ -118,9 +118,7 @@ class Server(object):
                 if not self.started:
                     self.sendToEmacs(toxml(d))
                     self.started = True
-            elif elem.nodeName == "notify":
-                self.sendToEmacs(data)
-            elif elem.nodeName == "resume":
+            elif elem.nodeName in ["notify", "resume", "unidle"]:
                 self.sendToEmacs(data)
             else:
                 log.err("Unkown command: " + data)

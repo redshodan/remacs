@@ -126,8 +126,10 @@ class Client(object):
             elif elem.nodeName == "suspend":
                 self.emacs_suspended = True
                 self.tray.iconify()
+            elif elem.nodeName == "unidle":
+                self.tray.xidler.unidle()
             else:
-                log.err("Unkown command: " + data)
+                log.error("Unkown command: " + data)
             d.unlink()
         else:
             return None
@@ -146,3 +148,7 @@ class Client(object):
         if self.emacs_suspended:
             self.emacs_suspended = False
             self.mgr.sendCmd(PipeBuff.CMD_CMD, "<resume/>")
+
+    def sendUnidle(self):
+        log.info("sendUnidle")
+        self.mgr.sendCmd(PipeBuff.CMD_CMD, "<unidle/>")

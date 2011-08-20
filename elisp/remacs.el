@@ -487,7 +487,7 @@ remacs or call `M-x remacs-force-delete' to forcibly disconnect it.")
 
 (defun remacs-forward (xml proc)
   (xml-put-attribute xml 'from (process-get proc 'id))
-  (remacs-log (format "%s" xml) proc)
+  (remacs-log (format "forward: %s" (xml-node-to-string xml)) proc)
   (dolist (p remacs-clients)
     (unless (eq p proc)
       (remacs-send-string p (xml-node-to-string xml)))))
