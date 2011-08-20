@@ -11,3 +11,7 @@
   - to/from addressing:
     - server have id's
     - clients have id's like: client.server
+
+
+bugs:
+  - fix window resizing. does not go smaller, does not trigger and send notif.

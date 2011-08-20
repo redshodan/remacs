@@ -34,7 +34,7 @@ else:
     path = os.path.dirname(__file__)
 sys.path.append(os.path.abspath(os.path.join(path, "build/python")))
 
-import sys
+import sys, random
 from optparse import OptionParser
 
 import remacs
@@ -55,6 +55,9 @@ if __name__ == "__main__":
                       help="Transport program. ie: ssh")
     parser.add_option("-X", "--no-x", action="store_true", dest="no_x",
                       default=False, help="Disable X support")
+    parser.add_option("-i", "--id", dest="id",
+                      default=str(int(random.random()*100)),
+                      help="Set the id for this client")
     (options, args) = parser.parse_args()
 
     if options.server:

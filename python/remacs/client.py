@@ -98,8 +98,9 @@ class Client(object):
             log.verb("winsize %d: %s" % (len(buff), buff))
             self.mgr.sendCmd(
                 PipeBuff.CMD_CMD,
-                "<setup><tty term='%s' row='%d' col='%d'/></setup>" %
-                (self.term, row, col))
+                ("<setup><tty term='%s' row='%d' col='%d'/>" +
+                     "<id name='%s'/></setup>") %
+                (self.term, row, col, self.options.id))
         except Exception, e:
             log.exception("sigWINCH: %s" % str(e))
             import traceback
@@ -107,19 +108,21 @@ class Client(object):
             print e
 
     def cmdCB(self, cmd, data):
-        log.verb("CLIENT CMD: %s DATA:%d %s" % (cmd, len(data), data))
-        if cmd == PipeBuff.CMD_TTY:
-            return data
-        elif cmd == PipeBuff.CMD_CMD:
+        log.verb("client.cmdCB: %s" % data)
+        if cmd == PipeBuff.CMD_CMD:
             d = dom.parseString(data)
             elem = d.firstChild
             if elem.nodeName == "error":
                 error = elem.firstChild.data
                 self.tray.error(error)
             elif elem.nodeName == "notify":
-                title = elem.firstChild.firstChild.data
-                body = elem.firstChild.nextSibling.firstChild.data
-                self.tray.notify(elem.getAttribute("id"), title + " : " + body)
+                if elem.getAttribute("type") == "set":
+                    title = elem.firstChild.firstChild.data
+                    body = elem.firstChild.nextSibling.firstChild.data
+                    self.tray.notify(elem.getAttribute("id"),
+                                     title + " : " + body)
+                elif elem.getAttribute("type") == "result":
+                    self.tray.clearNotify(elem.getAttribute("id"))
             elif elem.nodeName == "suspend":
                 self.emacs_suspended = True
                 self.tray.iconify()
@@ -132,12 +135,12 @@ class Client(object):
     def invokeNotif(self, id):
         log.info("invokeNotif: %s" % id)
         self.mgr.sendCmd(PipeBuff.CMD_CMD,
-                         "<notify id='%s' type='invoke'/>" % id)
+                         "<notify id='%s' type='result'><invoke/></notify>" % id)
 
     def readNotif(self, id):
         log.info("readNotif: %s" % id)
         self.mgr.sendCmd(PipeBuff.CMD_CMD,
-                         "<notify id='%s' type='read'/>" % id)
+                         "<notify id='%s' type='result'/>" % id)
 
     def resumeEmacs(self):
         if self.emacs_suspended:

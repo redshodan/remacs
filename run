@@ -3,4 +3,4 @@
 rm log-client ~/log-server -f
 export PATH=.:$PATH
 # exec emacs -nw -q elisp/remacs.el --eval "(progn (fset 'yes-or-no-p 'y-or-n-p)(eval-buffer (get-buffer \"remacs.el\"))(remacs-test))"
-exec emacs -nw -q --eval "(progn (find-file-noselect \"elisp/remacs.el\" t)(eval-buffer (get-buffer \"remacs.el\"))(remacs-test))"
+exec emacs -nw -q --eval "(progn (add-to-list 'load-path \"elisp\")(find-file-noselect \"elisp/remacs.el\" t)(eval-buffer (get-buffer \"remacs.el\"))(remacs-test))"

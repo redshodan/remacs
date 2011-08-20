@@ -147,6 +147,16 @@ class SysTray(threading.Thread):
         item.show()
         self.icon.set_blinking(True)
 
+    def clearNotify(self, id):
+        widget = None
+        for child in self.menu.get_children():
+            if hasattr(child, "remacs_id") and child.remacs_id == id:
+                widget = child
+                break
+        if widget:
+            widget.set_sensitive(False)
+        self.checkPending()
+        
     def showErrorDialog(self, msg):
         dialog = gtk.MessageDialog(buttons=gtk.BUTTONS_OK)
         dialog.set_markup(msg)

@@ -35,18 +35,23 @@
 ;; Received:
 ;;   <setup>
 ;;     <tty name='' term='' row='' col=''/>
+;;     <id name=''/>
 ;;     <env>
 ;;       <var>NAME=VALUE</var>
 ;;     </env>
 ;;   </setup>
 ;;   <eval>str</eval>
-;;   <msg>str</msg>
-;;   <notify id='12345' type='invoke|read'/>
 ;;   <resume/>
+;;
+;;   Broadcasted messages:
+;;     <msg>str</msg>
+;;     <notify id='12345' type='set|result'/>
+;;     <unidle/>
 ;;
 
 (require 'cl)
 (require 'xml)
+(require 'remacs-utils)
 
 (defvar remacs-name "remacs")
 (defvar remacs-socket-dir
@@ -186,7 +191,9 @@ remacs or call `M-x remacs-force-delete' to forcibly disconnect it.")
                  (xml-node-name (xml-get-children (xml-node-name xml) 'tty)))
                 (env
                  (xml-node-name (xml-get-children (xml-node-name xml) 'env)))
-                (envvar))
+                (id
+                 (xml-node-name (xml-get-children (xml-node-name xml) 'id)))
+                (envvar) (tty-name) (tty-term))
             ;; <env>
             (dolist (var (xml-get-children env 'var))
               ;; XXX Variables should be encoded as in getenv/setenv.
@@ -196,17 +203,18 @@ remacs or call `M-x remacs-force-delete' to forcibly disconnect it.")
             ;; <tty>
             (setq tty-name (xml-get-attribute tty 'name)
                   tty-term (xml-get-attribute tty 'term)
-                  frame (remacs-create-tty-frame tty-name tty-term proc))))
+                  frame (remacs-create-tty-frame tty-name tty-term proc))
+            ;; <id>
+            (process-put proc 'id (xml-get-attribute id 'name))))
          ;; <notify>
          ((eq (car (xml-node-name xml)) 'notify)
-          (let ((id (xml-get-attribute (xml-node-name xml) 'id))
-                (type (xml-get-attribute (xml-node-name xml) 'type)))
-            (lexical-let ((id id)
-                          (type type))
+            (lexical-let ((xml (xml-node-name xml)))
               (push (lambda ()
-                      (remacs-notify-invoke id proc
-                                            (not (equal type "invoke"))))
-                    commands))))
+                      (let ((id (xml-get-attribute xml 'id))
+                            (invoke (car (xml-node-children xml))))
+                        (remacs-notify-invoke id proc (not invoke))
+                        (remacs-forward xml proc)))
+                    commands)))
          ;; <msg>
          ((eq (car (xml-node-name xml)) 'msg)
           (let ((msg (format "remacs message: %s"
@@ -228,6 +236,11 @@ remacs or call `M-x remacs-force-delete' to forcibly disconnect it.")
             (if coding-system
                 (setq expr (decode-coding-string expr coding-system)))
             (push (lambda () (remacs-eval-and-print expr proc))
+                  commands)))
+         ;; <unidle>
+         ((eq (car (xml-node-name xml)) 'unidle)
+          (lexical-let ((xml (xml-node-name xml)))
+            (push (lambda () (remacs-handle-unidle xml proc))
                   commands)))
          
          ;; Unknown command.
@@ -459,13 +472,25 @@ remacs or call `M-x remacs-force-delete' to forcibly disconnect it.")
       (insert (current-time-string)
               (cond
                ((null client) " ")
-               ((listp client) (format " %s: " (car client)))
+               ((listp client)
+                (format " %s-%s: " (car client) (process-get proc 'id)))
                (t (format " %s: " client)))
               string)
       (or (bolp) (newline)))))
 
 (defun remacs-process-log(server client msg)
   (remacs-log msg client))
+
+(defun remacs-handle-unidle (xml proc)
+  (remacs-log (format "unidle from %s" (process-get proc 'id)))
+  (remacs-forward xml proc))
+
+(defun remacs-forward (xml proc)
+  (xml-put-attribute xml 'from (process-get proc 'id))
+  (remacs-log (format "%s" xml) proc)
+  (dolist (p remacs-clients)
+    (unless (eq p proc)
+      (remacs-send-string p (xml-node-to-string xml)))))
 
 ;;;
 ;;; Notification
@@ -474,42 +499,12 @@ remacs or call `M-x remacs-force-delete' to forcibly disconnect it.")
 (defvar remacs-notify-counter 0)
 (defvar remacs-notify-alist '())
 
-(unless (fboundp 'get-alist)
-  (defun get-alist (key alist)
-    (cdr (assoc key alist))))
-(unless (fboundp 'set-alist)
-  (defun set-alist (symbol key value)
-    "Set cdr of an element (KEY . ...) in the alist bound to SYMBOL to VALUE."
-    (or (boundp symbol)
-        (set symbol nil))
-    (set symbol (put-alist key value (symbol-value symbol))))
-  (defun put-alist (key value alist)
-    "Set cdr of an element (KEY . ...) in ALIST to VALUE and return ALIST.
-If there is no such element, create a new pair (KEY . VALUE) and
-return a new alist whose car is the new pair and cdr is ALIST."
-    (let ((elm (assoc key alist)))
-      (if elm
-          (progn
-            (setcdr elm value)
-            alist)
-        (cons (cons key value) alist))))
-  (defun del-alist (key alist)
-    "Delete an element whose car equals KEY from ALIST.
-Return the modified ALIST."
-    (let ((pair (assoc key alist)))
-      (if pair
-          (delq pair alist)
-        alist)))
-  (defun remove-alist (symbol key)
-    "Delete an element whose car equals KEY from the alist bound to SYMBOL."
-    (and (boundp symbol)
-         (set symbol (del-alist key (symbol-value symbol))))))
-
 (defun remacs-notify (title body &optional cb)
   (setq remacs-notify-counter (+ 1 remacs-notify-counter))
   (set-alist 'remacs-notify-alist (format "%s" remacs-notify-counter)
              (list title body cb))
-  (let ((msg (format "<notify id='%d'><title>%s</title><body>%s</body></notify>"
+  (let ((msg (format (concat "<notify id='%d' type='set'><title>%s</title>"
+                             "<body>%s</body></notify>")
                      remacs-notify-counter title body)))
     (dolist (proc remacs-clients)
       (remacs-send-string proc msg))
@@ -545,6 +540,6 @@ Return the modified ALIST."
 (defun remacs-notify-test ()
   (interactive)
   (remacs-notify "1 title" "1 body")
-  (dolist (proc remacs-clients)
-    (remacs-send-error proc "some error"))
+  ;; (dolist (proc remacs-clients)
+  ;;   (remacs-send-error proc "some error"))
   (remacs-notify "2 title" "2 body" 'remacs-notify-test-cb))
