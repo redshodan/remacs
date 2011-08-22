@@ -482,7 +482,7 @@ remacs or call `M-x remacs-force-delete' to forcibly disconnect it.")
   (remacs-log msg client))
 
 (defun remacs-handle-unidle (xml proc)
-  (remacs-log (format "unidle from %s" (process-get proc 'id)))
+  (remacs-log (format "unidle from %s" (process-get proc 'id)) proc)
   (remacs-forward xml proc))
 
 (defun remacs-forward (xml proc)
