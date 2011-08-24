@@ -39,6 +39,9 @@
 ;;     <env>
 ;;       <var>NAME=VALUE</var>
 ;;     </env>
+;;     <filter>      -- optional
+;;       <unidle/>   -- and other stanzas
+;;     </filter>
 ;;   </setup>
 ;;   <eval>str</eval>
 ;;   <resume/>
@@ -193,19 +196,26 @@ remacs or call `M-x remacs-force-delete' to forcibly disconnect it.")
                  (xml-node-name (xml-get-children (xml-node-name xml) 'env)))
                 (id
                  (xml-node-name (xml-get-children (xml-node-name xml) 'id)))
-                (envvar) (tty-name) (tty-term))
+                (filter
+                 (xml-node-name (xml-get-children (xml-node-name xml) 'filter)))
+                (envvar) (tty-name) (tty-term) (filters))
             ;; <env>
-            (dolist (var (xml-get-children env 'var))
-              ;; XXX Variables should be encoded as in getenv/setenv.
-              (setq envvar (car (xml-node-children var)))
-              (remacs-log (format "env: %s" envvar) proc)
-              (process-put proc 'env (cons envvar (process-get proc 'env))))
+            (when env
+              (dolist (var (xml-get-children env 'var))
+                ;; XXX Variables should be encoded as in getenv/setenv.
+                (process-put proc 'env (cons (car (xml-node-children var))
+                                             (process-get proc 'env)))))
             ;; <tty>
             (setq tty-name (xml-get-attribute tty 'name)
                   tty-term (xml-get-attribute tty 'term)
                   frame (remacs-create-tty-frame tty-name tty-term proc))
             ;; <id>
-            (process-put proc 'id (xml-get-attribute id 'name))))
+            (process-put proc 'id (xml-get-attribute id 'name))
+            ;; <filter>
+            (when filter
+              (dolist (f (xml-node-children filter))
+                (push (xml-node-name f) filters))
+              (process-put proc 'stanza-filters filters))))
          ;; <notify>
          ((eq (car (xml-node-name xml)) 'notify)
             (lexical-let ((xml (xml-node-name xml)))
@@ -489,7 +499,8 @@ remacs or call `M-x remacs-force-delete' to forcibly disconnect it.")
   (xml-put-attribute xml 'from (process-get proc 'id))
   (remacs-log (format "forward: %s" (xml-node-to-string xml)) proc)
   (dolist (p remacs-clients)
-    (unless (eq p proc)
+    (unless (or (eq p proc)
+                (memq (car xml) (process-get proc 'stanza-filters)))
       (remacs-send-string p (xml-node-to-string xml)))))
 
 ;;;

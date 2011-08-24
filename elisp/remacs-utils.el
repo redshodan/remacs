@@ -88,7 +88,7 @@
   (defun xml-put-attribute (node attribute value)
     (let ((attrs (xml-node-attributes node)))
       (if (not attrs)
-          (setcar (cdr node) (list (list attribute value)))
+          (setcar (cdr node) (list (cons attribute value)))
         (setcar (cdr node) (put-alist attribute value attrs)))
       node)))
 

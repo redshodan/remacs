@@ -39,7 +39,7 @@ class XIdler(object):
         self.last = time.time()
         self.idle = 0
         self.pending = True
-        self.ignore = False
+        self.ignore = 0
         gobject.timeout_add(1000, self.check)
 
     # Batch up unidle's to once every idle_delay seconds
@@ -47,8 +47,8 @@ class XIdler(object):
         cur = idle.getIdleSec()
         now = time.time()
         # log.verb("XIdler.check: idle=%d cur=%d now=%d", self.idle, cur, now)
-        if self.ignore:
-            self.ignore = False
+        if self.ignore and self.ignore + self.idle_delay / 2.0 < now:
+            self.ignore = 0
             self.pending = False
             self.last = now
         else:
@@ -68,5 +68,5 @@ class XIdler(object):
         gobject.timeout_add(1000, self.check)
 
     def unidle(self):
-        self.ignore = True
+        self.ignore = time.time()
         idle.unIdle()
