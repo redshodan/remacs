@@ -104,8 +104,9 @@
          (concat "Unable to start remacs.\n"
                  (format "There is an existing remacs server, named %S.\n"
                          remacs-name)
-                 "To start remacs in this Emacs process, stop the existing
-remacs or call `M-x remacs-force-delete' to forcibly disconnect it.")
+                 "To start remacs in this Emacs process, stop the existing "
+                 "remacs or call `M-x remacs-force-delete' to forcibly "
+                 "disconnect it.")
          :warning)
         (setq leave-dead t))
       ;; If this Emacs already had a server, clear out associated status.
@@ -166,7 +167,7 @@ remacs or call `M-x remacs-force-delete' to forcibly disconnect it.")
     (when prev
       (setq string (concat prev string))
       (process-put proc 'previous-string nil)))
-  ;; (condition-case err
+  (condition-case err
   (progn
     (if (not (string-match "\000" string))
         ;; Save for later any partial line that remains.
@@ -274,8 +275,7 @@ remacs or call `M-x remacs-force-delete' to forcibly disconnect it.")
           (remacs-goto-toplevel proc))
         
         (remacs-execute-continuation proc))))
-  ;; condition-case
-  ;; (error (remacs-return-error err proc)))
+  (error (remacs-return-error err proc)))
   )
 
 (defun remacs-goto-toplevel (proc)
@@ -475,11 +475,14 @@ remacs or call `M-x remacs-force-delete' to forcibly disconnect it.")
   (remacs-log (concat "Sent " err) proc)
   (remacs-send-string (concat err "\000") proc))
 
-(defun remacs-send-string (string &optional proc)
+(defun remacs-send-string (string &optional proc originator)
   (if proc
       (remacs-send-string2 string proc)
     (dolist (proc remacs-clients)
-      (remacs-send-string2 string proc))))
+      ;; Apply stanza filters
+      (unless (or (eq proc originator)
+                  (memq (car xml) (process-get proc 'stanza-filters)))
+        (remacs-send-string2 string proc)))))
 
 (defun remacs-send-string2 (string proc)
   (remacs-log (concat "Sent " string) proc)
@@ -504,10 +507,7 @@ remacs or call `M-x remacs-force-delete' to forcibly disconnect it.")
 (defun remacs-forward (xml proc)
   (xml-put-attribute xml 'from (process-get proc 'id))
   (remacs-log (format "forward: %s" (xml-node-to-string xml)) proc)
-  (dolist (p remacs-clients)
-    (unless (or (eq p proc)
-                (memq (car xml) (process-get proc 'stanza-filters)))
-      (remacs-send-string2 (xml-node-to-string xml) p))))
+  (remacs-send-string (xml-node-to-string xml) nil proc))
 
 (defun remacs-handle-unidle (xml proc)
   (remacs-log (format "unidle from %s" (process-get proc 'id)) proc)
