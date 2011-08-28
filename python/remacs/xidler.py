@@ -21,8 +21,9 @@
 #
 
 
-import time
-import gobject
+import os, time, fcntl, subprocess, commands
+from subprocess import Popen
+import gobject, gtk, glib
 
 import remacs
 from remacs import log, idle
@@ -32,7 +33,7 @@ class XIdler(object):
     def __init__(self, tray, client):
         self.tray = tray
         self.client = client
-        self.idle_delay = 20
+        self.idle_delay = 5
 
     def start(self):
         idle.init()
@@ -40,15 +41,40 @@ class XIdler(object):
         self.idle = 0
         self.pending = True
         self.ignore = 0
+        self.saver_on = False
         gobject.timeout_add(1000, self.check)
+        ret = commands.getstatusoutput("which xscreensaver-command")
+        if ret[0] == 0 and len(ret[1]):
+            log.verb("Starting xsaver: " + ret[1])
+            self.xsaver = Popen([ret[1], "-watch"], stdout=subprocess.PIPE)
+            fcntl.fcntl(self.xsaver.stdout, fcntl.F_SETFL, os.O_NONBLOCK)
+            glib.io_add_watch(self.xsaver.stdout, glib.IO_IN, self.onXSaver)
+
+    def onXSaver(self, fd, state):
+        try:
+            line = fd.readline().rstrip("\n")
+            log.verb("xsaver: %s", line)
+            if line.startswith("UNBLANK"):
+                self.saver_on = False
+            elif line.startswith("LOCK"):
+                self.saver_on = True
+            return True
+        except Exception, e:
+            log.exception("onXSaver: " + str(e))
+            return False
 
     # Batch up unidle's to once every idle_delay seconds
     def check(self):
         cur = idle.getIdleSec()
         now = time.time()
-        # log.verb("XIdler.check: idle=%d cur=%d now=%d", self.idle, cur, now)
-        if self.ignore and self.ignore + self.idle_delay / 2.0 < now:
+        # log.verb(
+        #     "XIdler.check: idle=%d cur=%d now=%d ignore=%s pending=%s on=%s",
+        #     self.idle, cur, now, self.ignore, self.pending, self.saver_on)
+        if (self.saver_on or (self.ignore and self.ignore < now)):
             self.ignore = 0
+            self.pending = False
+            self.last = now
+        elif self.ignore and self.ignore >= now:
             self.pending = False
             self.last = now
         else:
@@ -68,5 +94,6 @@ class XIdler(object):
         gobject.timeout_add(1000, self.check)
 
     def unidle(self):
-        self.ignore = time.time()
-        idle.unIdle()
+        if not self.saver_on:
+            self.ignore = time.time() + 2
+            idle.unIdle()

@@ -49,19 +49,25 @@ static PyObject * idle_getIdleSec(PyObject *self, PyObject *args)
         if (XScreenSaverQueryExtension(display, &event_base, &error_base))
         {
                 if (mit_info == NULL)
-                        mit_info = XScreenSaverAllocInfo();
+                {
+                    mit_info = XScreenSaverAllocInfo();
+                }
                 XScreenSaverQueryInfo(display, RootWindow(display, 0), mit_info);
                 idle_time = (mit_info->idle) / 1000;
         }
         else
-                idle_time = 0;
+        {
+            idle_time = 0;
+        }
 
         return Py_BuildValue("i", idle_time);
 }
 
 static PyObject * idle_unIdle(PyObject *self, PyObject *args)
 {
-    XTestFakeRelativeMotionEvent(display, 0, 0, 0);
+    /* XTestFakeRelativeMotionEvent(display, 0, 0, 0); */
+    XTestFakeRelativeMotionEvent(display, 1, 1, CurrentTime);
+    XTestFakeRelativeMotionEvent(display, -1, -1, CurrentTime);
 
     Py_INCREF(Py_None);
     return Py_None;
