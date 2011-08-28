@@ -30,7 +30,7 @@ python: $(BDIRS) $(OBJS) idle
 
 idle: $(BUILD)/remacs/idle.so
 $(BUILD)/remacs/idle.so: lib/idle.c
-	gcc -shared -fPIC -Wall -I /usr/include/python$(PYVER) lib/idle.c -lpython$(PYVER) -lX11 -lXss -lXtst -o $(BUILD)/remacs/idle.so
+	gcc -g -shared -fPIC -Wall -I /usr/include/python$(PYVER) lib/idle.c -lpython$(PYVER) -lX11 -lXss -o $(BUILD)/remacs/idle.so
 
 tests: $(BDIRS) clean-run python $(TOBJS)
 	(cd build/runs; python ../tests/run.pyc)

@@ -95,5 +95,6 @@ class XIdler(object):
 
     def unidle(self):
         if not self.saver_on:
+            log.verb("Sending unidle to X server")
             self.ignore = time.time() + 2
             idle.unIdle()
