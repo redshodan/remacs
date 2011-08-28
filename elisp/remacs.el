@@ -67,6 +67,7 @@
 
 (defvar remacs-process nil)
 (defvar remacs-clients nil)
+(defvar remacs-idle-timer nil)
 
 (define-minor-mode remacs-mode
   :global t
@@ -87,6 +88,9 @@
               (yes-or-no-p
                "The current remacs still has clients; delete them? ")))
     (let ()
+      (when remacs-idle-timer
+        (cancel-timer remacs-idle-timer))
+      (setq remacs-idle-timer (run-at-time t 1 'remacs-check-idle))
       (when remacs-process
         ;; kill it dead!
         (ignore-errors (delete-process remacs-process)))
@@ -271,7 +275,7 @@ remacs or call `M-x remacs-force-delete' to forcibly disconnect it.")
         
         (remacs-execute-continuation proc))))
   ;; condition-case
-  ;; (error (remacs-return-error proc err)))
+  ;; (error (remacs-return-error err proc)))
   )
 
 (defun remacs-goto-toplevel (proc)
@@ -311,7 +315,7 @@ remacs or call `M-x remacs-force-delete' to forcibly disconnect it.")
             (message "%s"
                      (substitute-command-keys
                       "When done with this frame, type \\[delete-frame]")))))
-      (error (remacs-return-error proc err)))))
+      (error (remacs-return-error err proc)))))
 
 (defun remacs-delete-client (proc &optional noframe)
   (remacs-log (concat "remacs-delete-client" (if noframe " noframe")) proc)
@@ -360,7 +364,7 @@ remacs or call `M-x remacs-force-delete' to forcibly disconnect it.")
   (dolist (proc (remacs-clients-with 'terminal terminal))
     (remacs-log (format "remacs-handle-suspend-tty, terminal %s" terminal) proc)
     (condition-case err
-        (remacs-send-string proc "<suspend/>")
+        (remacs-send-string "<suspend/>" proc)
       (file-error                       ;The pipe/socket was closed.
        (ignore-errors (remacs-delete-client proc))))))
 
@@ -408,7 +412,7 @@ remacs or call `M-x remacs-force-delete' to forcibly disconnect it.")
     ;; (switch-to-buffer (get-buffer-create "*scratch*") 'norecord)
 
     ;; Reply with our pid.
-    (remacs-send-string proc (format "<emacs pid='%d'/>" (emacs-pid)))
+    (remacs-send-string (format "<emacs pid='%d'/>" (emacs-pid)) proc)
     
     frame))
 
@@ -458,20 +462,26 @@ remacs or call `M-x remacs-force-delete' to forcibly disconnect it.")
   (when remacs-clients
     (yes-or-no-p "This Emacs session has clients; exit anyway? ")))
 
-(defun remacs-return-error (proc err)
+(defun remacs-return-error (err &optional proc)
   (ignore-errors
-    (remacs-send-error proc err)
+    (remacs-send-error err proc)
     (delete-process proc)))
 
-(defun remacs-send-error (proc err)
+(defun remacs-send-error (err &optional proc)
   (when (not (stringp err))
     (setq err (error-message-string err)))
   (remacs-log (concat "ERROR: " err) proc)
   (setq err (format "<error>%s</error>" err))
   (remacs-log (concat "Sent " err) proc)
-  (process-send-string proc (concat err "\000")))
+  (remacs-send-string (concat err "\000") proc))
 
-(defun remacs-send-string (proc string)
+(defun remacs-send-string (string &optional proc)
+  (if proc
+      (remacs-send-string2 string proc)
+    (dolist (proc remacs-clients)
+      (remacs-send-string2 string proc))))
+
+(defun remacs-send-string2 (string proc)
   (remacs-log (concat "Sent " string) proc)
   (process-send-string proc (concat string "\000")))
 
@@ -491,17 +501,85 @@ remacs or call `M-x remacs-force-delete' to forcibly disconnect it.")
 (defun remacs-process-log(server client msg)
   (remacs-log msg client))
 
-(defun remacs-handle-unidle (xml proc)
-  (remacs-log (format "unidle from %s" (process-get proc 'id)) proc)
-  (remacs-forward xml proc))
-
 (defun remacs-forward (xml proc)
   (xml-put-attribute xml 'from (process-get proc 'id))
   (remacs-log (format "forward: %s" (xml-node-to-string xml)) proc)
   (dolist (p remacs-clients)
     (unless (or (eq p proc)
                 (memq (car xml) (process-get proc 'stanza-filters)))
-      (remacs-send-string p (xml-node-to-string xml)))))
+      (remacs-send-string2 (xml-node-to-string xml) p))))
+
+(defun remacs-handle-unidle (xml proc)
+  (remacs-log (format "unidle from %s" (process-get proc 'id)) proc)
+  (remacs-do-unidle)
+  (remacs-forward xml proc))
+
+(defun remacs-send-unidle ()
+  (remacs-send-string "<unidle/>"))
+
+(defvar remacs-idle-delay 5)
+(defvar remacs-idle-last (current-time))
+(defvar remacs-idle-idle '(0 0 0))
+(defvar remacs-idle-pending t)
+(defvar remacs-idle-ignore '(0 0 0))
+
+(defun remacs-time-< (lhs rhs)
+  (if (< (car lhs) (car rhs))
+      t
+    (if (and (= (car lhs) (car rhs))
+             (< (car (cdr lhs)) (car (cdr rhs))))
+        t
+      (if (and (= (car lhs) (car rhs))
+               (= (car (cdr lhs)) (car (cdr rhs)))
+               (< (car (cdr (cdr lhs))) (car (cdr (cdr rhs)))))
+          t
+        nil))))
+
+(defun remacs-do-unidle ()
+  (let ((cur (current-time)))
+    (setcar (cdr cur) (+ (car (cdr cur)) 2))
+    (setq remacs-idle-ignore cur))
+  (signal-process (emacs-pid) 10))
+
+(defun remacs-check-idle ()
+  (condition-case err
+  (let ((cur (if (current-idle-time) (current-idle-time) '(0 0 0)))
+        (now (current-time)))
+    (remacs-log
+     (format
+      "remacs-check-idle: idle=%s cur=%s now=%s last=%s ignore=%s pending=%s"
+      remacs-idle-idle cur now remacs-idle-last remacs-idle-ignore
+      remacs-idle-pending))
+    (if (and (not (equal remacs-idle-ignore '(0 0 0)))
+             (remacs-time-< remacs-idle-ignore now))
+        (setq remacs-idle-ignore '(0 0 0)
+              remacs-idle-pending nil
+              remacs-idle-last now)
+      (if (and (not (equal remacs-idle-ignore '(0 0 0)))
+               (not (remacs-time-< remacs-idle-ignore now)))
+          (setq remacs-idle-pending nil
+                remacs-idle-last now)
+        (let ((tmp (copy-tree remacs-idle-last))
+              (fire))
+          (setcar (cdr tmp) (+ (car (cdr tmp)) remacs-idle-delay))
+          (if (or (equal cur '(0 0 0))
+                  (remacs-time-< cur remacs-idle-idle))
+              (if (remacs-time-< tmp now)
+                  (setq fire t)
+                (setq remacs-idle-pending t))
+            (when (and remacs-idle-pending
+                       (remacs-time-< tmp now))
+              (setq fire t)))
+          (remacs-log (format "tmp=%s fire=%s" tmp fire))
+          (when fire
+            (remacs-send-unidle)
+            (setq remacs-idle-pending nil
+                  remacs-idle-last now)))))
+    (setq remacs-idle-idle cur))
+  (error
+   (cancel-timer remacs-idle-timer)
+   (remacs-return-error err))))
+
 
 ;;;
 ;;; Notification
@@ -517,8 +595,7 @@ remacs or call `M-x remacs-force-delete' to forcibly disconnect it.")
   (let ((msg (format (concat "<notify id='%d' type='set'><title>%s</title>"
                              "<body>%s</body></notify>")
                      remacs-notify-counter title body)))
-    (dolist (proc remacs-clients)
-      (remacs-send-string proc msg))
+    (remacs-send-string msg)
     remacs-notify-counter))
 
 (defun remacs-notify-invoke (id proc ack-only)
@@ -551,6 +628,5 @@ remacs or call `M-x remacs-force-delete' to forcibly disconnect it.")
 (defun remacs-notify-test ()
   (interactive)
   (remacs-notify "1 title" "1 body")
-  ;; (dolist (proc remacs-clients)
-  ;;   (remacs-send-error proc "some error"))
+  ;; (remacs-send-error proc "some error")
   (remacs-notify "2 title" "2 body" 'remacs-notify-test-cb))
