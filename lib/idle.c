@@ -66,11 +66,11 @@ static PyObject * idle_init(PyObject *self, PyObject *args)
         unsigned int i;
         for (i = 0; i < nc; ++i)
         {
-            Atom type;
+            Atom type = XA_STRING;
             unsigned long bytesLeft = 1;
-            unsigned long numItems;
-            unsigned char* rawData;
-            int size;
+            unsigned long numItems = 0;
+            unsigned char* rawData = NULL;
+            int size = 0;
             if ((XGetWindowProperty(display, cw[i], ssVer, 0, 0, False,
                                     type, &type, &size, &numItems,
                                     &bytesLeft, &rawData) == Success) &&

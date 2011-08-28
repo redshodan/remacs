@@ -545,11 +545,11 @@ remacs or call `M-x remacs-force-delete' to forcibly disconnect it.")
   (condition-case err
   (let ((cur (if (current-idle-time) (current-idle-time) '(0 0 0)))
         (now (current-time)))
-    (remacs-log
-     (format
-      "remacs-check-idle: idle=%s cur=%s now=%s last=%s ignore=%s pending=%s"
-      remacs-idle-idle cur now remacs-idle-last remacs-idle-ignore
-      remacs-idle-pending))
+    ;; (remacs-log
+    ;;  (format
+    ;;   "remacs-check-idle: idle=%s cur=%s now=%s last=%s ignore=%s pending=%s"
+    ;;   remacs-idle-idle cur now remacs-idle-last remacs-idle-ignore
+    ;;   remacs-idle-pending))
     (if (and (not (equal remacs-idle-ignore '(0 0 0)))
              (remacs-time-< remacs-idle-ignore now))
         (setq remacs-idle-ignore '(0 0 0)
@@ -570,7 +570,6 @@ remacs or call `M-x remacs-force-delete' to forcibly disconnect it.")
             (when (and remacs-idle-pending
                        (remacs-time-< tmp now))
               (setq fire t)))
-          (remacs-log (format "tmp=%s fire=%s" tmp fire))
           (when fire
             (remacs-send-unidle)
             (setq remacs-idle-pending nil
