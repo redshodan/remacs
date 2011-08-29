@@ -20,11 +20,6 @@
 ;;;
 
 
-(defun remacs-return-error (err &optional proc)
-  (ignore-errors
-    (remacs-send-error err proc)
-    (delete-process proc)))
-
 (defun remacs-send-error (err &optional proc)
   (when (not (stringp err))
     (setq err (error-message-string err)))
@@ -53,18 +48,9 @@
     (remacs-log (concat "Sent: " string) proc)
     (process-send-string proc (concat string "\000"))))
 
-(defun remacs-forward (xml proc)
+(defun remacs-broadcast (xml proc)
   (xml-put-attribute xml 'from (process-get proc 'id))
   (remacs-log (format "forwarding: %s" (xml-node-to-string xml)) proc)
   (remacs-send-xml xml nil proc))
-
-(defun remacs-handle-unidle (xml proc)
-  (remacs-log (format "unidle from %s" (process-get proc 'id)) proc)
-  (remacs-do-unidle)
-  (remacs-forward xml proc))
-
-(defun remacs-send-unidle ()
-  (unless (null remacs-clients)
-    (remacs-send-string "<unidle/>")))
 
 (provide 'remacs-router)

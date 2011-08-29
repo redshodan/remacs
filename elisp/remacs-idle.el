@@ -24,25 +24,40 @@
 (defvar remacs-idle-idle '(0 0 0))
 (defvar remacs-idle-pending t)
 (defvar remacs-idle-ignore '(0 0 0))
+(defvar remacs-idle-timer nil)
 
 
-(defun remacs-time-< (lhs rhs)
-  (if (< (car lhs) (car rhs))
-      t
-    (if (and (= (car lhs) (car rhs))
-             (< (car (cdr lhs)) (car (cdr rhs))))
-        t
-      (if (and (= (car lhs) (car rhs))
-               (= (car (cdr lhs)) (car (cdr rhs)))
-               (< (car (cdr (cdr lhs))) (car (cdr (cdr rhs)))))
-          t
-        nil))))
+;;;
+;;; Commands
+;;;
+(defun remacs-handle-unidle (xml proc)
+  (remacs-log (format "unidle from %s" (process-get proc 'id)) proc)
+  (remacs-do-unidle)
+  (remacs-broadcast xml proc))
+
+(defun remacs-send-unidle ()
+  (unless (null remacs-clients)
+    (remacs-send-string "<unidle/>")))
 
 (defun remacs-do-unidle ()
   (let ((cur (current-time)))
     (setcar (cdr cur) (+ (car (cdr cur)) 2))
     (setq remacs-idle-ignore cur))
   (signal-process (emacs-pid) 10))
+
+
+;;;
+;;; Idle timer
+;;;
+
+(defun remacs-start-idle-timer ()
+  (remacs-stop-idle-timer)
+  (setq remacs-idle-timer (run-at-time t 1 'remacs-check-idle)))
+
+(defun remacs-stop-idle-timer ()
+  (when remacs-idle-timer
+    (cancel-timer remacs-idle-timer))
+  (setq remacs-idle-timer nil))
 
 (defun remacs-check-idle ()
   (condition-case err
@@ -79,7 +94,20 @@
                       remacs-idle-last now)))))
         (setq remacs-idle-idle cur))
     (error
-     (cancel-timer remacs-idle-timer)
+     (remacs-stop-idle-timer)
      (remacs-return-error err))))
+
+(defun remacs-time-< (lhs rhs)
+  (if (< (car lhs) (car rhs))
+      t
+    (if (and (= (car lhs) (car rhs))
+             (< (car (cdr lhs)) (car (cdr rhs))))
+        t
+      (if (and (= (car lhs) (car rhs))
+               (= (car (cdr lhs)) (car (cdr rhs)))
+               (< (car (cdr (cdr lhs))) (car (cdr (cdr rhs)))))
+          t
+        nil))))
+
 
 (provide 'remacs-idle)

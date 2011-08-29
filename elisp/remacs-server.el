@@ -22,7 +22,6 @@
 
 (defvar remacs-process nil)
 (defvar remacs-clients nil)
-(defvar remacs-idle-timer nil)
 
 
 (defun remacs-start (&optional leave-dead)
@@ -38,9 +37,7 @@
               (yes-or-no-p
                "The current remacs still has clients; delete them? ")))
     (let ()
-      (when remacs-idle-timer
-        (cancel-timer remacs-idle-timer))
-      (setq remacs-idle-timer (run-at-time t 1 'remacs-check-idle))
+      (remacs-start-idle-timer)
       (buffer-disable-undo (get-buffer-create remacs-buffer))
       (when remacs-process
         ;; kill it dead!
@@ -179,7 +176,7 @@
                         (let ((id (xml-get-attribute xml 'id))
                               (invoke (car (xml-node-children xml))))
                           (remacs-notify-invoke id proc (not invoke))
-                          (remacs-forward xml proc)))
+                          (remacs-broadcast xml proc)))
                       commands)))
              ;; <msg>
              ((eq (car (xml-node-name xml)) 'msg)
@@ -412,5 +409,11 @@
 (defun remacs-kill-emacs-query-function ()
   (when remacs-clients
     (yes-or-no-p "This Emacs session has clients; exit anyway? ")))
+
+(defun remacs-return-error (err &optional proc)
+  (ignore-errors
+    (remacs-send-error err proc)
+    (delete-process proc)))
+
 
 (provide 'remacs-server)
