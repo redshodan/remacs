@@ -95,7 +95,6 @@
   (setq remacs-log t)
   (toggle-debug-on-error)
   (remacs-start)
-  (get-buffer-create remacs-buffer)
   (switch-to-buffer remacs-buffer))
 
 (defun remacs-notify-test-cb (id)
