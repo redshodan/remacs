@@ -105,3 +105,6 @@
   (remacs-notify "1 title" "1 body")
   ;; (remacs-send-error proc "some error")
   (remacs-notify "2 title" "2 body" 'remacs-notify-test-cb))
+
+
+(provide 'remacs)
