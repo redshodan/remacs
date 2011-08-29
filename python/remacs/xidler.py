@@ -33,7 +33,7 @@ class XIdler(object):
     def __init__(self, tray, client):
         self.tray = tray
         self.client = client
-        self.idle_delay = 5
+        self.idle_delay = 20
 
     def start(self):
         idle.init()

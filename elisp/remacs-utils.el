@@ -20,6 +20,50 @@
 ;;;
 
 
+;;;
+;;; Remacs buffer functions
+;;;
+
+
+(define-minor-mode remacs-mode
+  :global t
+  :group 'remacs
+  :version "22.1"
+  (remacs-start (not remacs-mode)))
+
+(defun remacs-log (string &optional client)
+  (when remacs-log
+    (with-current-buffer (get-buffer-create remacs-buffer)
+      (goto-char (point-max))
+      (insert (current-time-string)
+              (cond
+               ((null client) " ")
+               ((listp client)
+                (format " %s-%s: " (car client) (process-get proc 'id)))
+               (t (format " %s: " client)))
+              string)
+      (or (bolp) (newline))
+      (remacs-truncate-buffer))))
+
+(defun remacs-process-log (server client msg)
+  (remacs-log msg client)
+  (remacs-truncate-buffer))
+
+(defun remacs-truncate-buffer ()
+  (with-current-buffer (get-buffer-create remacs-buffer)
+    (when (> (buffer-size) remacs-buffer-size)
+      (save-restriction
+        (widen)
+        (let ((end (- (buffer-end 1) remacs-buffer-size)))
+          (goto-char end)
+          (beginning-of-line)
+          (setq end (point))
+          (let ((inhibit-read-only t))
+            (delete-region (point-min) end)))))))
+
+;;;
+;;; Misc utilities to complete emacs behavior
+;;;
 
 (unless (fboundp 'jabber-escape-xml)
   (defun jabber-escape-xml (str)
@@ -43,7 +87,8 @@
 
 ;; Was jabber-sexp2xml from jabber.el
 (defun xml-node-to-string (sexp)
-  "converts an SEXP in the format (tagname ((attribute-name . attribute-value)...) children...) and converts it to well-formatted xml."
+ "converts an SEXP in the format (tagname ((attribute-name . attribute-value)...)
+  children...) and converts it to well-formatted xml."
   (cond
    ((stringp sexp)
     (jabber-escape-xml sexp))
