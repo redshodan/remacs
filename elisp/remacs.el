@@ -23,34 +23,6 @@
 ;;; Based on server.el.
 ;;;
 
-;;
-;; Protocol:
-;;
-;; Sent:
-;;   <emacs pid='12345'/>
-;;   <error>str</error>
-;;   <notify id='12345'><title>str</title><body>str</body></notify>
-;;   <suspend/>
-;;
-;; Received:
-;;   <setup>
-;;     <tty name='' term='' row='' col=''/>
-;;     <id name=''/>
-;;     <env>
-;;       <var>NAME=VALUE</var>
-;;     </env>
-;;     <filter>      -- optional
-;;       <unidle/>   -- and other stanzas
-;;     </filter>
-;;   </setup>
-;;   <eval>str</eval>
-;;   <resume/>
-;;
-;;   Broadcasted messages:
-;;     <msg>str</msg>
-;;     <notify id='12345' type='set|result'/>
-;;     <unidle/>
-;;
 
 (require 'cl)
 (require 'xml)
