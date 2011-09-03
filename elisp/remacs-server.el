@@ -123,98 +123,23 @@
               (process-put proc 'previous-string string))
 
           (let ((request (substring string 0 (match-beginning 0)))
-                (coding-system (and default-enable-multibyte-characters
-                                    (or file-name-coding-system
-                                        default-file-name-coding-system)))
-                xml
-                frame ; The frame that was opened for the client.
-                commands
-                tty-name       ; the tty name.
-                tty-term       ; string.
-                command-line-args-left
-                arg)
+                (xml) (frame) (tty-name) (commands))
             ;; Remove this line from STRING.
             (setq string (substring string (match-end 0)))
             ;; Parse the request
             (with-temp-buffer
               (insert request)
               (setq xml (xml-parse-region (point-min) (point-max))))
-            (cond
-             ;; <setup>
-             ((eq (car (xml-node-name xml)) 'setup)
-              (let ((tty
-                     (xml-node-name (xml-get-children (xml-node-name xml) 'tty)))
-                    (env
-                     (xml-node-name (xml-get-children (xml-node-name xml) 'env)))
-                    (id
-                     (xml-node-name (xml-get-children (xml-node-name xml) 'id)))
-                    (filter
-                     (xml-node-name (xml-get-children (xml-node-name xml)
-                                                      'filter)))
-                    (envvar) (tty-name) (tty-term) (filters))
-                ;; <env>
-                (when env
-                  (dolist (var (xml-get-children env 'var))
-                    ;; XXX Variables should be encoded as in getenv/setenv.
-                    (process-put proc 'env (cons (car (xml-node-children var))
-                                                 (process-get proc 'env)))))
-                ;; <tty>
-                (setq tty-name (xml-get-attribute tty 'name)
-                      tty-term (xml-get-attribute tty 'term)
-                      frame (remacs-create-tty-frame tty-name tty-term proc))
-                ;; <id>
-                (process-put proc 'id (xml-get-attribute id 'name))
-                ;; <filter>
-                (when filter
-                  (dolist (f (xml-node-children filter))
-                    (push (xml-node-name f) filters))
-                  (process-put proc 'stanza-filters filters))))
-             ;; <notify>
-             ((eq (car (xml-node-name xml)) 'notify)
-              (lexical-let ((xml (xml-node-name xml)))
-                (push (lambda ()
-                        (let ((id (xml-get-attribute xml 'id))
-                              (invoke (car (xml-node-children xml))))
-                          (remacs-notify-invoke id proc (not invoke))
-                          (remacs-broadcast xml proc)))
-                      commands)))
-             ;; <msg>
-             ((eq (car (xml-node-name xml)) 'msg)
-              (let ((msg (format "remacs message: %s"
-                                 (car (xml-node-children (xml-node-name xml))))))
-                (remacs-log msg proc)
-                (message msg)))
-             ;; <resume>
-             ((eq (car (xml-node-name xml)) 'resume)
-              (remacs-log "Resuming" proc)
-              (lexical-let ((terminal (process-get proc 'terminal)))
-                (setq dontkill t)
-                (push (lambda ()
-                        (when (eq (terminal-live-p terminal) t)
-                          (resume-tty terminal)))
-                      commands)))
-             ;; <eval>
-             ((eq (car (xml-node-name xml)) 'eval)
-              (lexical-let ((expr (car (xml-node-children (xml-node-name xml)))))
-                (if coding-system
-                    (setq expr (decode-coding-string expr coding-system)))
-                (push (lambda () (remacs-eval-and-print expr proc))
-                      commands)))
-             ;; <unidle>
-             ((eq (car (xml-node-name xml)) 'unidle)
-              (lexical-let ((xml (xml-node-name xml)))
-                (push (lambda () (remacs-handle-unidle xml proc))
-                      commands)))
-             
-             ;; Unknown command.
-             (t (error "Unknown command: %s" arg)))
 
+            ;; Process the command
+            (setq commands (remacs-process-command proc frame tty-name xml))
+            
             (process-put
              proc 'continuation
              (lexical-let ((proc proc)
-                           (commands commands)
                            (frame frame)
-                           (tty-name tty-name))
+                           (tty-name tty-name)
+                           (commands commands))
                (lambda ()
                  (with-current-buffer (get-buffer-create remacs-buffer)
                    (remacs-execute proc commands frame tty-name)))))

@@ -58,6 +58,8 @@
 (require 'remacs-router)
 (require 'remacs-idle)
 (require 'remacs-server)
+(require 'remacs-cmds)
+(require 'remacs-notify)
 
 
 (defvar remacs-name "remacs"
