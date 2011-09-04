@@ -20,33 +20,22 @@
 ;;;
 
 
+(defvar remacs-stanza-counter 0)
+
+
 (defun remacs-query (body type &optional from to &rest attrs)
-  (let ((qattrs) (battrs) (key))
-    (dolist (attr attrs)
-      (when (and key val) (setq key nil val nil))
-      (if key
-          ()
-        (setq key attr))
-      (push (cons battrs
+  (let ((qattrs) (key))
     (unless from (setq from remacs-id))
-    ;; (unless attrs (setq attrs (list)))
     (push (cons 'type type) qattrs)
     (push (cons 'from from) qattrs)
     (when to (push (cons 'to to) qattrs))
-    (list (list 'query qattrs (list (list body attrs nil))))))
+    (list (list 'query qattrs (list (apply 'xml-node body nil attrs))))))
 
 (defun remacs-send-error (err &optional proc)
   (when (not (stringp err))
     (setq err (error-message-string err)))
   (remacs-log (concat "ERROR: " err) proc)
-  (setq err (format "<error>%s</error>" err))
-  (remacs-send-query err proc))
-
-(defun remacs-send-query (string &optional proc originator)
-  (with-temp-buffer
-    (insert string)
-    (let ((xml (xml-parse-region (point-min) (point-max))))
-      (remacs-send-xml xml proc originator))))
+  (remacs-send-xml (remacs-query 'error "set" err) proc))
 
 (defun remacs-send-string (string &optional proc originator)
   (with-temp-buffer
@@ -64,10 +53,13 @@
         (remacs-send-xml2 xml proc)))))
 
 (defun remacs-send-xml2 (xml proc)
+  (setq remacs-stanza-counter (+ 1 remacs-stanza-counter))
   (xml-put-attribute xml 'to (process-get proc 'id))
+  (xml-put-attribute xml 'id (format "%d" remacs-stanza-counter))
   (let ((string (xml-node-to-string xml)))
     (remacs-log (concat "Sent: " string) proc)
-    (process-send-string proc (concat string "\000"))))
+    (process-send-string proc (concat string "\000"))
+    remacs-stanza-counter))
 
 (defun remacs-broadcast (xml proc)
   (xml-put-attribute xml 'from (process-get proc 'id))

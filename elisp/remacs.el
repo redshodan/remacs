@@ -25,8 +25,8 @@
 
 
 (require 'cl)
-(require 'xml)
 (require 'remacs-utils)
+(require 'remacs-xml)
 (require 'remacs-router)
 (require 'remacs-idle)
 (require 'remacs-server)
@@ -34,7 +34,7 @@
 (require 'remacs-notify)
 
 
-(defvar remacs-id (message-make-host-name)
+(defvar remacs-id (concat (remacs-hostname) "-emacs")
   "Name of the remacs server. Used to identify it with other remacs entities.")
 
 (defvar remacs-server-name "remacs"
@@ -80,7 +80,7 @@
 (defun remacs-notify-test ()
   (interactive)
   (remacs-notify "1 title" "1 body")
-  ;; (remacs-send-error proc "some error")
+  ;; (remacs-send-error "some error" proc)
   (remacs-notify "2 title" "2 body" 'remacs-notify-test-cb))
 
 

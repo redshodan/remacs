@@ -37,7 +37,7 @@
 
 (defun remacs-send-unidle ()
   (unless (null remacs-clients)
-    (remacs-send-string "<unidle/>")))
+    (remacs-send-xml (remacs-query 'unidle "set"))))
 
 (defun remacs-do-unidle ()
   (let ((cur (current-time)))

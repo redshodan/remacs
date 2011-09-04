@@ -237,8 +237,9 @@
   (dolist (proc (remacs-clients-with 'terminal terminal))
     (remacs-log (format "remacs-handle-suspend-tty, terminal %s" terminal) proc)
     (condition-case err
-        (remacs-send-string "<suspend/>" proc)
-      (file-error                       ;The pipe/socket was closed.
+        (remacs-send-xml (remacs-query 'suspend "set") proc)
+      ;; The pipe/socket was closed.
+      (file-error
        (ignore-errors (remacs-delete-client proc))))))
 
 (defun remacs-create-tty-frame (tty type proc)
@@ -285,7 +286,8 @@
     ;; (switch-to-buffer (get-buffer-create "*scratch*") 'norecord)
 
     ;; Reply with our pid.
-    (remacs-send-string (format "<emacs pid='%d'/>" (emacs-pid)) proc)
+    (remacs-send-xml (remacs-query 'emacs "set" nil nil
+                                   'pid (format "%s" (emacs-pid))) proc)
     
     frame))
 

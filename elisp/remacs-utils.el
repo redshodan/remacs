@@ -62,81 +62,19 @@
             (delete-region (point-min) end)))))))
 
 ;;;
-;;; Misc utilities to complete emacs behavior
+;;; misc remacs utilities
 ;;;
+(defun remacs-hostname ()
+  (with-temp-buffer
+    (call-process shell-file-name nil t nil shell-command-switch "hostname")
+    (beginning-of-buffer)
+    (search-forward "\n")
+    (narrow-to-region 1 (- (point) 1))
+    (buffer-string)))
 
-(unless (fboundp 'jabber-escape-xml)
-  (defun jabber-escape-xml (str)
-    "escape strings for xml"
-    (if (stringp str)
-        (let ((newstr (concat str)))
-          ;; Form feeds might appear in code you copy, etc.  Nevertheless,
-          ;; it's invalid XML.
-          (setq newstr (replace-regexp-in-string newstr "\f" "\n"))
-          ;; Other control characters are also illegal, except for
-          ;; tab, CR, and LF.
-          (setq newstr (replace-regexp-in-string
-                          newstr "[\000-\010\013\014\016-\037]" " "))
-          (setq newstr (replace-regexp-in-string newstr "&" "&amp;"))
-          (setq newstr (replace-regexp-in-string newstr "<" "&lt;"))
-          (setq newstr (replace-regexp-in-string newstr ">" "&gt;"))
-          (setq newstr (replace-regexp-in-string newstr "'" "&apos;"))
-          (setq newstr (replace-regexp-in-string newstr "\"" "&quot;"))
-          newstr)
-      str)))
-
-;; Was jabber-sexp2xml from jabber.el
-(defun xml-node-to-string (sexp)
- "converts an SEXP in the format (tagname ((attribute-name . attribute-value)...)
-  children...) and converts it to well-formatted xml."
-  (cond
-   ((stringp sexp)
-    (jabber-escape-xml sexp))
-   ((listp (car sexp))
-    (let ((xml ""))
-      (dolist (tag sexp)
-        (setq xml (concat xml (xml-node-to-string tag))))
-      xml))
-   ;; work around bug in old versions of xml.el, where ("") can appear
-   ;; as children of a node
-   ((and (consp sexp)
-         (stringp (car sexp))
-         (zerop (length (car sexp))))
-    "")
-   (t
-    (let ((xml ""))
-      (setq xml (concat "<" 
-                        (symbol-name (car sexp))))
-      (dolist (attr (cadr sexp))
-        (if (consp attr)
-            (setq xml (concat xml
-                              (format " %s='%s'"
-                                      (symbol-name (car attr))
-                                      (cdr attr)
-                                      (jabber-escape-xml (cdr attr))
-                                      )))))
-      (if (cddr sexp)
-          (progn
-            (setq xml (concat xml ">"))
-            (dolist (child (cddr sexp))
-              (setq xml (concat xml
-                                (xml-node-to-string child))))
-            (setq xml (concat xml
-                              "</"
-                              (symbol-name (car sexp))
-                              ">")))
-        (setq xml (concat xml
-                          "/>")))
-      xml))))
-
-(unless (fboundp 'xml-put-attribute)
-  (defun xml-put-attribute (node attribute value)
-    (let ((attrs (xml-node-attributes node)))
-      (if (not attrs)
-          (setcar (cdr node) (list (cons attribute value)))
-        (setcar (cdr node) (put-alist attribute value attrs)))
-      node)))
-
+;;;
+;;; alist utilities
+;;;
 (unless (fboundp 'get-alist)
   (defun get-alist (key alist)
     (cdr (assoc key alist))))

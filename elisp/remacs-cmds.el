@@ -37,15 +37,10 @@
 
 ;; <setup>
 (defun remacs-process-setup (proc frame tty-name xml)
-  (let ((tty
-         (xml-node-name (xml-get-children (xml-node-name xml) 'tty)))
-        (env
-         (xml-node-name (xml-get-children (xml-node-name xml) 'env)))
-        (id
-         (xml-node-name (xml-get-children (xml-node-name xml) 'id)))
-        (filter
-         (xml-node-name (xml-get-children (xml-node-name xml)
-                                          'filter)))
+  (let ((tty (xml-node-node (xml-get-children (xml-node-name xml) 'tty)))
+        (env (xml-node-node (xml-get-children (xml-node-name xml) 'env)))
+        (id (xml-node-node (xml-get-children (xml-node-name xml) 'id)))
+        (filter (xml-node-node (xml-get-children (xml-node-name xml) 'filter)))
         (envvar) (tty-name) (tty-term) (filters))
     ;; <env>
     (when env

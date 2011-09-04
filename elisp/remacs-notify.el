@@ -30,19 +30,25 @@
 
 
 (defun remacs-notify (title body &optional cb)
+  ;; <query type='set'>
+  ;;    <notify id='' type='set'>
+  ;;       <title>...</title>"
+  ;;       <body>...</body>
+  ;;    </notify>
+  ;; </query>
   (setq remacs-notify-counter (+ 1 remacs-notify-counter))
   (set-alist 'remacs-notify-alist (format "%s" remacs-notify-counter)
              (list title body cb))
-  (let ((msg (format (concat "<notify id='%d' type='set'><title>%s</title>"
-                             "<body>%s</body></notify>")
-                     remacs-notify-counter title body)))
-    (remacs-send-string msg)
-    remacs-notify-counter))
+  (let ((query (remacs-query 'notify "set"))
+        (notify (xml-get-children query 'notify)))
+    (xml-put-child notify 'title title)
+    (xml-put-child notify 'body body)
+    (remacs-send-xml query)))
 
 (defun remacs-notify-invoke (id proc ack-only)
   (let ((notif (get-alist id remacs-notify-alist)))
     (if (not notif)
-        (remacs-send-error proc (format "Failed to find notification: %s" id))
+        (remacs-send-error (format "Failed to find notification: %s" id) proc)
       (progn
         (if (or ack-only (not (nth 2 notif)))
             (remacs-log (format "Clearing notification %s: %s" id notif))
