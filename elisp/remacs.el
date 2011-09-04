@@ -34,7 +34,10 @@
 (require 'remacs-notify)
 
 
-(defvar remacs-name "remacs"
+(defvar remacs-id (message-make-host-name)
+  "Name of the remacs server. Used to identify it with other remacs entities.")
+
+(defvar remacs-server-name "remacs"
   "Name of the remacs server. Used to identify it locally with the
 `remacs-socket-dir'")
 
@@ -42,7 +45,7 @@
   (format "%s/remacs%d" (or (getenv "TMPDIR") "/tmp") (user-uid))
   "Directory that contains the remacs socket interface.")
 
-(defvar remacs-file (expand-file-name remacs-name remacs-socket-dir)
+(defvar remacs-file (expand-file-name remacs-server-name remacs-socket-dir)
   "The filename of the remacs socket, built on top of `remacs-socket-dir'")
 
 (defvar remacs-buffer "*remacs*"

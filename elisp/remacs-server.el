@@ -43,7 +43,7 @@
         ;; kill it dead!
         (ignore-errors (delete-process remacs-process)))
       ;; Delete the socket files made by previous server invocations.
-      (if (not (eq t (remacs-running-p remacs-name)))
+      (if (not (eq t (remacs-running-p remacs-server-name)))
           ;; Remove any leftover socket or authentication file
           (ignore-errors (delete-file remacs-file))
         (setq remacs-mode nil) ;; already set by the minor mode code
@@ -51,7 +51,7 @@
          'remacs
          (concat "Unable to start remacs.\n"
                  (format "There is an existing remacs server, named %S.\n"
-                         remacs-name)
+                         remacs-server-name)
                  "To start remacs in this Emacs process, stop the existing "
                  "remacs or call `M-x remacs-force-delete' to forcibly "
                  "disconnect it.")
@@ -77,7 +77,7 @@
           (add-hook 'kill-emacs-hook (lambda () (remacs-mode -1)))
           (setq remacs-process
                 (apply #'make-network-process
-                       :name remacs-name
+                       :name remacs-server-name
                        :server t
                        :noquery t
                        :sentinel 'remacs-sentinel
@@ -309,7 +309,7 @@
         (push proc result)))))
 
 (defun remacs-running-p (&optional name)
-  (unless name (setq name remacs-name))
+  (unless name (setq name remacs-server-name))
   (condition-case nil
       (progn
         (delete-process

@@ -113,7 +113,7 @@
                               (format " %s='%s'"
                                       (symbol-name (car attr))
                                       (cdr attr)
-                                      ;; (jabber-escape-xml (cdr attr))
+                                      (jabber-escape-xml (cdr attr))
                                       )))))
       (if (cddr sexp)
           (progn

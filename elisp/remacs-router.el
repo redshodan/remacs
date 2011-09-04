@@ -20,13 +20,33 @@
 ;;;
 
 
+(defun remacs-query (body type &optional from to &rest attrs)
+  (let ((qattrs) (battrs) (key))
+    (dolist (attr attrs)
+      (when (and key val) (setq key nil val nil))
+      (if key
+          ()
+        (setq key attr))
+      (push (cons battrs
+    (unless from (setq from remacs-id))
+    ;; (unless attrs (setq attrs (list)))
+    (push (cons 'type type) qattrs)
+    (push (cons 'from from) qattrs)
+    (when to (push (cons 'to to) qattrs))
+    (list (list 'query qattrs (list (list body attrs nil))))))
+
 (defun remacs-send-error (err &optional proc)
   (when (not (stringp err))
     (setq err (error-message-string err)))
   (remacs-log (concat "ERROR: " err) proc)
   (setq err (format "<error>%s</error>" err))
-  (remacs-log (concat "Sent " err) proc)
-  (remacs-send-string (concat err "\000") proc))
+  (remacs-send-query err proc))
+
+(defun remacs-send-query (string &optional proc originator)
+  (with-temp-buffer
+    (insert string)
+    (let ((xml (xml-parse-region (point-min) (point-max))))
+      (remacs-send-xml xml proc originator))))
 
 (defun remacs-send-string (string &optional proc originator)
   (with-temp-buffer
@@ -44,13 +64,14 @@
         (remacs-send-xml2 xml proc)))))
 
 (defun remacs-send-xml2 (xml proc)
+  (xml-put-attribute xml 'to (process-get proc 'id))
   (let ((string (xml-node-to-string xml)))
     (remacs-log (concat "Sent: " string) proc)
     (process-send-string proc (concat string "\000"))))
 
 (defun remacs-broadcast (xml proc)
   (xml-put-attribute xml 'from (process-get proc 'id))
-  (remacs-log (format "forwarding: %s" (xml-node-to-string xml)) proc)
+  (remacs-log (format "broadcasting: %s" (xml-node-to-string xml)) proc)
   (remacs-send-xml xml nil proc))
 
 (provide 'remacs-router)
