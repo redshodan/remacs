@@ -23,19 +23,19 @@
 (defvar remacs-stanza-counter 0)
 
 
-(defun remacs-query (body type &optional from to &rest attrs)
+(defun remacs-query (body type &optional from to text &rest attrs)
   (let ((qattrs) (key))
     (unless from (setq from remacs-id))
     (push (cons 'type type) qattrs)
     (push (cons 'from from) qattrs)
     (when to (push (cons 'to to) qattrs))
-    (list (list 'query qattrs (list (apply 'xml-node body nil attrs))))))
+    (list (list 'query qattrs (list (apply 'xml-node body text attrs))))))
 
 (defun remacs-send-error (err &optional proc)
   (when (not (stringp err))
     (setq err (error-message-string err)))
   (remacs-log (concat "ERROR: " err) proc)
-  (remacs-send-xml (remacs-query 'error "set" err) proc))
+  (remacs-send-xml (remacs-query 'error "set" nil nil err) proc))
 
 (defun remacs-send-string (string &optional proc originator)
   (with-temp-buffer

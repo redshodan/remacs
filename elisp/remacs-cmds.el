@@ -19,7 +19,7 @@
 ;;; $Revision$
 ;;;
 
-(defvar remacs-cmd-handlers-alist
+(defvar remacs-query-cmd-handlers-alist
   '((setup . remacs-process-setup)
     (notify . remacs-process-notify)
     (msg . remacs-process-msg)
@@ -28,19 +28,21 @@
     (unidle . remacs-process-unidle)))
 
 (defun remacs-process-command (proc frame tty-name xml)
-  (let ((handler
-         (get-alist (car (xml-node-name xml)) remacs-cmd-handlers-alist)))
-    (remacs-log (format "handler %s" handler) proc)
+  (let* ((child (xml-get-child xml))
+         (handler
+          (when (and child (eq (xml-node-name xml) 'query))
+            (get-alist (xml-node-name child)
+                       remacs-query-cmd-handlers-alist))))
     (if handler
-        (funcall handler proc frame tty-name xml)
+        (funcall handler proc frame tty-name xml child)
       (error "Unknown command"))))
 
 ;; <setup>
-(defun remacs-process-setup (proc frame tty-name xml)
-  (let ((tty (xml-node-node (xml-get-children (xml-node-name xml) 'tty)))
-        (env (xml-node-node (xml-get-children (xml-node-name xml) 'env)))
-        (id (xml-node-node (xml-get-children (xml-node-name xml) 'id)))
-        (filter (xml-node-node (xml-get-children (xml-node-name xml) 'filter)))
+(defun remacs-process-setup (proc frame tty-name xml child)
+  (let ((tty (xml-get-children child 'tty))
+        (env (xml-get-children child 'env))
+        (id (xml-get-children child 'id))
+        (filter (xml-get-children child 'filter))
         (envvar) (tty-name) (tty-term) (filters))
     ;; <env>
     (when env
@@ -61,23 +63,23 @@
       (process-put proc 'stanza-filters filters))))
 
 ;; <notify>
-(defun remacs-process-notify (proc frame tty-name xml)
-  (lexical-let ((xml (xml-node-name xml)))
+(defun remacs-process-notify (proc frame tty-name xml child)
+  (lexical-let ((child child))
     (list (lambda ()
-            (let ((id (xml-get-attribute xml 'id))
-                  (invoke (car (xml-node-children xml))))
+            (let ((id (xml-get-attribute child 'id))
+                  (invoke (car (xml-node-children child))))
               (remacs-notify-invoke id proc (not invoke))
               (remacs-broadcast xml proc))))))
 
 ;; <msg>
-(defun remacs-process-msg (proc frame tty-name xml)
+(defun remacs-process-msg (proc frame tty-name xml child)
   (let ((msg (format "remacs message: %s"
-                     (car (xml-node-children (xml-node-name xml))))))
+                     (car (xml-node-children (xml-node-name child))))))
     (remacs-log msg proc)
     (message msg)))
 
 ;; <resume>
-(defun remacs-process-resume (proc frame tty-name xml)
+(defun remacs-process-resume (proc frame tty-name xml child)
   (remacs-log "Resuming" proc)
   (lexical-let ((terminal (process-get proc 'terminal)))
     (list (lambda ()
@@ -85,18 +87,19 @@
               (resume-tty terminal))))))
 
 ;; <eval>
-(defun remacs-process-eval (proc frame tty-name xml)
+(defun remacs-process-eval (proc frame tty-name xml child)
   (let ((coding-system (and default-enable-multibyte-characters
                             (or file-name-coding-system
                                 default-file-name-coding-system))))
-    (lexical-let ((expr (car (xml-node-children (xml-node-name xml)))))
+    (lexical-let ((expr (car (xml-node-children child))))
       (if coding-system
           (setq expr (decode-coding-string expr coding-system)))
       (list (lambda () (remacs-eval-and-print expr proc))))))
 
 ;; <unidle>
-(defun remacs-process-unidle (proc frame tty-name xml)
-  (list (lexical-let ((xml (xml-node-name xml)))
-          (lambda () (remacs-handle-unidle xml proc)))))
+(defun remacs-process-unidle (proc frame tty-name xml child)
+  (list
+   (lexical-let ((xml xml))
+     (lambda () (remacs-handle-unidle xml proc)))))
 
 (provide 'remacs-cmds)

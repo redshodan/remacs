@@ -31,14 +31,19 @@ home = None
 from xml.dom import minidom as dom
 impl = dom.getDOMImplementation()
 d = impl.createDocument(None, None, None)
-XML_PREFIX = len(d.toxml())
+XML_PREFIX = d.toxml()
+XML_PREFIX_LEN = len(XML_PREFIX)
 d.unlink()
 del d
 del impl
 
 
 def toxml(elem):
-    return elem.toxml()[XML_PREFIX:]
+    string = elem.toxml()
+    if string.startswith(XML_PREFIX):
+        return string[XML_PREFIX:]
+    else:
+        return string
 
 
 def init(path):

@@ -32,7 +32,6 @@ from remacs.ttymanager import TTYManager
 class Server(object):
     def __init__(self, options):
         self.options = options
-        self.started = False
         self.sock = None
         self.pipe = None
         self.emacs_pid = None
@@ -69,11 +68,12 @@ class Server(object):
         log.verb("Received from emacs: %s" % buff)
         d = dom.parseString(buff)
         elem = d.firstChild
-        if elem.nodeName == "emacs":
-            self.emacs_pid = elem.getAttribute("pid")
-            log.info("Emacs PID=%s" % self.emacs_pid)
-        elif elem.nodeName in ["error", "notify", "suspend", "unidle"]:
-            self.mgr.sendCmd(PipeBuff.CMD_CMD, buff)
+        if elem.nodeName in ["query"]:
+            if elem.firstChild.nodeName == "emacs":
+                self.emacs_pid = elem.firstChild.getAttribute("pid")
+                log.info("Emacs PID=%s" % self.emacs_pid)
+            else:
+                self.mgr.sendCmd(PipeBuff.CMD_CMD, buff)
         else:
             log.error("Invalid command from emacs")
         d.unlink()
@@ -105,21 +105,18 @@ class Server(object):
         elif cmd == PipeBuff.CMD_CMD:
             d = dom.parseString(data)
             elem = d.firstChild
-            if elem.nodeName == "setup":
-                tty = elem.getElementsByTagName("tty")
-                if tty:
-                    tty = tty[0]
-                    row = int(tty.getAttribute("row"))
-                    col = int(tty.getAttribute("col"))
-                    buff = struct.pack("HHHH", row, col, 0, 0)
-                    log.verb("Setting winsize: %s %s" % (row, col))
-                    fcntl.ioctl(self.tty, termios.TIOCSWINSZ, buff)
-                    tty.setAttribute("name", os.ttyname(self.slave))
-                if not self.started:
-                    self.sendToEmacs(toxml(d))
-                    self.started = True
-            elif elem.nodeName in ["notify", "resume", "unidle"]:
-                self.sendToEmacs(data)
+            if elem.nodeName in ["query"]:
+                if elem.firstChild.nodeName == "setup":
+                    tty = elem.firstChild.getElementsByTagName("tty")
+                    if tty:
+                        tty = tty[0]
+                        row = int(tty.getAttribute("row"))
+                        col = int(tty.getAttribute("col"))
+                        buff = struct.pack("HHHH", row, col, 0, 0)
+                        log.verb("Setting winsize: %s %s" % (row, col))
+                        fcntl.ioctl(self.tty, termios.TIOCSWINSZ, buff)
+                        tty.setAttribute("name", os.ttyname(self.slave))
+                self.sendToEmacs(toxml(elem))
             else:
                 log.err("Unkown command: " + data)
             d.unlink()

@@ -98,8 +98,8 @@ class Client(object):
             log.verb("winsize %d: %s" % (len(buff), buff))
             self.mgr.sendCmd(
                 PipeBuff.CMD_CMD,
-                ("<setup><tty term='%s' row='%d' col='%d'/>" +
-                     "<id name='%s'/></setup>") %
+                ("<query><setup><tty term='%s' row='%d' col='%d'/>" +
+                     "<id name='%s'/></setup></query>") %
                 (self.term, row, col, self.options.id))
         except Exception, e:
             log.exception("sigWINCH: %s" % str(e))
@@ -112,22 +112,26 @@ class Client(object):
         if cmd == PipeBuff.CMD_CMD:
             d = dom.parseString(data)
             elem = d.firstChild
-            if elem.nodeName == "error":
-                error = elem.firstChild.data
-                self.tray.error(error)
-            elif elem.nodeName == "notify":
-                if elem.getAttribute("type") == "set":
-                    title = elem.firstChild.firstChild.data
-                    body = elem.firstChild.nextSibling.firstChild.data
-                    self.tray.notify(elem.getAttribute("id"),
-                                     title + " : " + body)
-                elif elem.getAttribute("type") == "result":
-                    self.tray.clearNotify(elem.getAttribute("id"))
-            elif elem.nodeName == "suspend":
-                self.emacs_suspended = True
-                self.tray.iconify()
-            elif elem.nodeName == "unidle":
-                self.tray.xidler.unidle()
+            if elem.nodeName == "query":
+                child = elem.firstChild
+                if child.nodeName == "error":
+                    error = child.firstChild.data
+                    self.tray.error(error)
+                elif child.nodeName == "notify":
+                    if child.getAttribute("type") == "set":
+                        title = child.firstChild.firstChild.data
+                        body = child.firstChild.nextSibling.firstChild.data
+                        self.tray.notify(child.getAttribute("id"),
+                                         title + " : " + body)
+                    elif child.getAttribute("type") == "result":
+                        self.tray.clearNotify(child.getAttribute("id"))
+                elif child.nodeName == "suspend":
+                    self.emacs_suspended = True
+                    self.tray.iconify()
+                elif child.nodeName == "unidle":
+                    self.tray.xidler.unidle()
+                else:
+                    log.error("Unkown command: " + data)
             else:
                 log.error("Unkown command: " + data)
             d.unlink()
@@ -137,18 +141,18 @@ class Client(object):
     def invokeNotif(self, id):
         log.info("invokeNotif: %s" % id)
         self.mgr.sendCmd(PipeBuff.CMD_CMD,
-                         "<notify id='%s' type='result'><invoke/></notify>" % id)
+                         "<query><notify id='%s' type='result'><invoke/></notify></query>" % id)
 
     def readNotif(self, id):
         log.info("readNotif: %s" % id)
         self.mgr.sendCmd(PipeBuff.CMD_CMD,
-                         "<notify id='%s' type='result'/>" % id)
+                         "<query><notify id='%s' type='result'/></query>" % id)
 
     def resumeEmacs(self):
         if self.emacs_suspended:
             self.emacs_suspended = False
-            self.mgr.sendCmd(PipeBuff.CMD_CMD, "<resume/>")
+            self.mgr.sendCmd(PipeBuff.CMD_CMD, "<query><resume/></query>")
 
     def sendUnidle(self):
         log.info("sendUnidle")
-        self.mgr.sendCmd(PipeBuff.CMD_CMD, "<unidle/>")
+        self.mgr.sendCmd(PipeBuff.CMD_CMD, "<query><unidle/></query>")

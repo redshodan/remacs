@@ -53,12 +53,22 @@
 
 
 (defun xml-nodep (node)
-  (and (when (listp node)
-         (symbolp (car node)))
-       (when (car (cdr node))
-         (and (listp (car (cdr node)))
-              (consp (car (car (cdr node))))))))
-
+  (and
+   ;; (symbol ...)
+   (when (listp node)
+     (symbolp (car node)))
+   (or
+    ;; (symbol ((a . b) ...) ...)
+    (when (car (cdr node))
+      (and (listp (car (cdr node)))
+           (consp (car (car (cdr node))))))
+    ;; (symbol nil (node ...))
+    (and (eq (car (cdr node)) nil)
+         (symbolp (caar (cddr node))))
+    ;; (symbol nil)
+    (eq (car (cdr node)) nil)
+    )))
+  
 (defun xml-node-node (node-or-xml-list)
   (if (xml-nodep (car node-or-xml-list))
       (car node-or-xml-list)
@@ -76,12 +86,16 @@
       (setq children (list text)))
     (list tag tattrs children)))
 
-(defun xml-get-child (node child-name)
-  (car (xml-get-children node child-name)))
+(defun xml-get-child (node &optional child-name)
+  (xml-node-node (xml-get-children node child-name)))
 
 (defun xml-put-child (node tag &optional text &rest attrs)
   (setcdr (last (cddr (xml-node-node node)))
           (cons (apply 'xml-node tag text attrs) '()))
+  node)
+
+(defun xml-put-child-string (node text)
+  (setcdr (last (cddr (xml-node-node node))) (cons text '()))
   node)
 
 (defun xml-put-attribute (node attribute value)
@@ -118,15 +132,17 @@ The list can be nil."
 This is a list of nodes, and it can be nil."
   (cddr (xml-node-node node)))
 
-(defun xml-get-children (node child-name)
+(defun xml-get-children (node &optional child-name)
   "Return the children of NODE whose tag is CHILD-NAME.
 CHILD-NAME should match the value returned by `xml-node-name'."
-  (let ((match ()))
-    (dolist (child (xml-node-children (xml-node-node node)))
-      (if (and (listp child)
-               (equal (xml-node-name child) child-name))
-          (push child match)))
-    (nreverse match)))
+  (if child-name
+      (let ((match ()))
+        (dolist (child (xml-node-children (xml-node-node node)))
+          (if (and (listp child)
+                   (equal (xml-node-name child) child-name))
+              (push child match)))
+        (nreverse match))
+    (car (xml-node-children (xml-node-node node)))))
 
 (defun xml-get-attribute-or-nil (node attribute)
   "Get from NODE the value of ATTRIBUTE.

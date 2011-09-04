@@ -286,7 +286,7 @@
     ;; (switch-to-buffer (get-buffer-create "*scratch*") 'norecord)
 
     ;; Reply with our pid.
-    (remacs-send-xml (remacs-query 'emacs "set" nil nil
+    (remacs-send-xml (remacs-query 'emacs "set" nil nil nil
                                    'pid (format "%s" (emacs-pid))) proc)
     
     frame))
