@@ -6,6 +6,7 @@ import android.app.Notification;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Intent;
+import android.net.Uri;
 import android.os.Binder;
 import android.os.IBinder;
 import android.util.Log;
@@ -47,6 +48,7 @@ public class RemacsService extends Service
     protected NotificationManager mNM;
     protected final IBinder mBinder = new RemacsBinder();
     protected Map<Integer, RemacsNotif> mNotifMap;
+    protected int mNotifCounter = 0;
     protected DocumentBuilder mParser;
 
     public RemacsService()
@@ -104,7 +106,7 @@ public class RemacsService extends Service
         return true;
     }
 
-    @SuppressWarnings("deprecation")
+    // @SuppressWarnings("deprecation")
     public void handleCmd(String data)
     {
         try
@@ -113,9 +115,25 @@ public class RemacsService extends Service
                 new StringBufferInputStream(data), null);
             Node cmd = document.getFirstChild();
             Log.d(TAG, String.format("nodename: %s", cmd.getNodeName()));
-            if (cmd.getNodeName().compareTo("notify") == 0)
+            if (cmd.getNodeName().compareTo("query") == 0)
             {
-                handleNotify(cmd, data);
+                Node child = document.getFirstChild();
+                if (child.getNodeName().compareTo("error") == 0)
+                {
+                    handleError(cmd, child, data);
+                }
+                else if (child.getNodeName().compareTo("notify") == 0)
+                {
+                    handleNotify(cmd, child, data);
+                }
+                else if (child.getNodeName().compareTo("suspend") == 0)
+                {
+                    handleSuspend(cmd, child, data);
+                }
+                else
+                {
+                    Log.w(TAG, "Unknown command: " + data);
+                }
             }
             else
             {
@@ -126,27 +144,27 @@ public class RemacsService extends Service
         {
             Log.e(TAG, "Failed handling command: " + e.toString());
         }
-        mParser.reset();
+        // mParser.reset();
     }
     
-    public void handleNotify(Node cmd, String data)
+    public void handleNotify(Node cmd, Node child, String data)
     {
-        NamedNodeMap attrs = cmd.getAttributes();
+        NamedNodeMap attrs = child.getAttributes();
         int id = Integer.parseInt(
             attrs.getNamedItem("id").getNodeValue());
         String title = null;
         String body = "";
-        NodeList children = cmd.getChildNodes();
+        NodeList children = child.getChildNodes();
         for (int i = 0; i < children.getLength(); ++i)
         {
-            Node child = children.item(i);
-            if (child.getNodeName().compareTo("title") == 0)
+            Node citer = children.item(i);
+            if (citer.getNodeName().compareTo("title") == 0)
             {
-                title = child.getFirstChild().getNodeValue();
+                title = citer.getFirstChild().getNodeValue();
             }
-            else if (child.getNodeName().compareTo("body") == 0)
+            else if (citer.getNodeName().compareTo("body") == 0)
             {
-                body = child.getFirstChild().getNodeValue();
+                body = citer.getFirstChild().getNodeValue();
             }
         }
         if (title == null)
@@ -155,11 +173,16 @@ public class RemacsService extends Service
         }
         else
         {
-            mNotifMap.put(id, new RemacsNotif(id, title, body));
             showNotification(id, title, body);
         }
     }
     
+    public void handleError(Node cmd, Node child, String data)
+    {
+        String error = child.getNodeValue();
+        showNotification(-1, "Error", error);
+    }
+
     protected void showNotification(int id, String title, String body)
     {
         Notification notification =
@@ -169,6 +192,14 @@ public class RemacsService extends Service
         Intent intent = new Intent(this, RemacsActivity.class);
         PendingIntent pending = PendingIntent.getActivity(this, 0, intent, 0);
         notification.setLatestEventInfo(this, title, body, pending);
+        mNotifMap.put(mNotifCounter, new RemacsNotif(id, title, body));
+        mNotifCounter++;
         mNM.notify(id, notification);
+    }
+
+    public void handleSuspend(Node cmd, Node child, String data)
+    {
+        Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse("minimize://"));
+        startActivity(intent);
     }
 }

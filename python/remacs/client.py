@@ -140,8 +140,10 @@ class Client(object):
 
     def invokeNotif(self, id):
         log.info("invokeNotif: %s" % id)
-        self.mgr.sendCmd(PipeBuff.CMD_CMD,
-                         "<query><notify id='%s' type='result'><invoke/></notify></query>" % id)
+        self.mgr.sendCmd(
+            PipeBuff.CMD_CMD,
+            ("<query><notify id='%s' type='result'><invoke/></notify>" +
+             "</query>") % id)
 
     def readNotif(self, id):
         log.info("readNotif: %s" % id)

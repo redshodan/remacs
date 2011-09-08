@@ -129,8 +129,9 @@ public abstract class Transport implements Runnable
     public void sendTTY()
     {
         String data =
-            String.format("<setup><tty term='%s' row='%d' col='%d'/></setup>",
-                          mCfg.term, mCfg.term_height, mCfg.term_width);
+            String.format("<query><setup><tty term='%s' row='%d' col='%d'/>" +
+                          "</setup></query>", mCfg.term, mCfg.term_height,
+                          mCfg.term_width);
         sendCmd(CMD_CMD, data);
     }
 

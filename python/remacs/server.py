@@ -118,5 +118,5 @@ class Server(object):
                         tty.setAttribute("name", os.ttyname(self.slave))
                 self.sendToEmacs(toxml(elem))
             else:
-                log.err("Unkown command: " + data)
+                log.error("Unkown command: " + data)
             d.unlink()
