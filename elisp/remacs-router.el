@@ -29,7 +29,7 @@
     (push (cons 'type type) qattrs)
     (push (cons 'from from) qattrs)
     (when to (push (cons 'to to) qattrs))
-    (list (list 'query qattrs (list (apply 'xml-node body text attrs))))))
+    (list (list 'query qattrs (apply 'xml-node body text attrs)))))
 
 (defun remacs-send-error (err &optional proc)
   (when (not (stringp err))

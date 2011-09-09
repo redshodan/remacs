@@ -53,33 +53,42 @@
 
 
 (defun xml-nodep (node)
-  (and
-   ;; (symbol ...)
-   (when (listp node)
-     (symbolp (car node)))
-   (or
-    ;; (symbol ((a . b) ...) ...)
-    (when (car (cdr node))
-      (and (listp (car (cdr node)))
-           (consp (car (car (cdr node))))))
-    ;; (symbol nil (node ...))
-    (and (eq (car (cdr node)) nil)
-         (symbolp (caar (cddr node))))
-    ;; (symbol nil)
-    (and (eq (length node) 2)
-         (eq (car (cdr node)) nil))
-    ;; (symbol nil nil)
-    (and (eq (length node) 3)
-         (eq (car (cdr node)) nil)
-         (eq (cadar (cdr node)) nil))
-    )))
+  (condition-case err
+      (and
+       ;; (symbol ...)
+       (when (listp node)
+         (symbolp (car node)))
+       (or
+        ;; (symbol ((a . b) ...) ...)
+        (when (car (cdr node))
+          (and (listp (car (cdr node)))
+               (consp (car (car (cdr node))))))
+        ;; (symbol nil ...)
+        (and (eq (car (cdr node)) nil)
+             (or
+              ;; (symbol nil string ...)
+              (stringp (cddr node))
+              ;; (symbol nil (node ...))
+              (symbolp (caar (cddr node)))
+              ))
+        ;; (symbol nil)
+        (and (eq (length node) 2)
+             (eq (car (cdr node)) nil))
+        ;; (symbol nil nil)
+        (and (eq (length node) 3)
+             (eq (car (cdr node)) nil)
+             (eq (cadar (cdr node)) nil))
+        ))
+    (error nil)))
   
 (defun xml-node-node (node-or-xml-list)
-  (if (xml-nodep (car node-or-xml-list))
-      (car node-or-xml-list)
-    (if (listp (car node-or-xml-list))
-        (xml-node-node (car node-or-xml-list))
-      node-or-xml-list)))
+  (if (stringp node-or-xml-list)
+      node-or-xml-list
+    (if (xml-nodep (car node-or-xml-list))
+        (car node-or-xml-list)
+      (if (listp (car node-or-xml-list))
+          (xml-node-node (car node-or-xml-list))
+        node-or-xml-list))))
 
 (defun xml-node (tag &optional text &rest attrs)
   (let ((tattrs) (children) (key))
@@ -90,7 +99,7 @@
             (setq key nil))
         (setq key attr)))
     (when text
-      (setq children (list text)))
+      (setq children text))
     (list tag tattrs children)))
 
 (defun xml-get-child (node &optional child-name)
@@ -99,11 +108,11 @@
 (defun xml-put-child (node tag &optional text &rest attrs)
   (message "node %s - %s - %s" (xml-node-node node) (last (xml-node-node node))
            (last (last (xml-node-node node))))
-  (let* ((l (last (xml-node-node node)))
-         (c (if (car l)
-                (cons (apply 'xml-node tag text attrs) '())
-              (list (cons (apply 'xml-node tag text attrs) '())))))
-    (setcar l c))
+  (let ((child (apply 'xml-node tag text attrs))
+         (l (last (xml-node-node node))))
+    (if (car l)
+        (setcdr l (cons child nil))
+      (setcar l child)))
   (message "node after %s" node)
   node)
 
@@ -223,16 +232,16 @@ See also `xml-get-attribute-or-nil'."
       (let ((newstr (concat str)))
         ;; Form feeds might appear in code you copy, etc.  Nevertheless,
         ;; it's invalid XML.
-        (setq newstr (replace-regexp-in-string newstr "\f" "\n"))
+        (setq newstr (replace-regexp-in-string "\f" "\n" newstr))
         ;; Other control characters are also illegal, except for
         ;; tab, CR, and LF.
         (setq newstr (replace-regexp-in-string
-                      newstr "[\000-\010\013\014\016-\037]" " "))
-        (setq newstr (replace-regexp-in-string newstr "&" "&amp;"))
-        (setq newstr (replace-regexp-in-string newstr "<" "&lt;"))
-        (setq newstr (replace-regexp-in-string newstr ">" "&gt;"))
-        (setq newstr (replace-regexp-in-string newstr "'" "&apos;"))
-        (setq newstr (replace-regexp-in-string newstr "\"" "&quot;"))
+                      "[\000-\010\013\014\016-\037]" " " newstr))
+        (setq newstr (replace-regexp-in-string "&" "&amp;" newstr))
+        (setq newstr (replace-regexp-in-string "<" "&lt;" newstr))
+        (setq newstr (replace-regexp-in-string ">" "&gt;" newstr))
+        (setq newstr (replace-regexp-in-string "'" "&apos;" newstr))
+        (setq newstr (replace-regexp-in-string "\"" "&quot;" newstr))
         newstr)
     str))
 
