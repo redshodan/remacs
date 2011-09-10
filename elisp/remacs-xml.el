@@ -106,14 +106,11 @@
   (xml-node-node (xml-get-children node child-name)))
 
 (defun xml-put-child (node tag &optional text &rest attrs)
-  (message "node %s - %s - %s" (xml-node-node node) (last (xml-node-node node))
-           (last (last (xml-node-node node))))
   (let ((child (apply 'xml-node tag text attrs))
          (l (last (xml-node-node node))))
     (if (car l)
         (setcdr l (cons child nil))
       (setcar l child)))
-  (message "node after %s" node)
   node)
 
 (defun xml-put-child-string (node text)

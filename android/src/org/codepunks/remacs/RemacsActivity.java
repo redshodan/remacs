@@ -58,7 +58,9 @@ public class RemacsActivity extends Activity
     {
         super.onCreate(savedInstanceState);
 
-        Log.d(TAG, "RemacsActivity.onCreate");
+        Log.d(TAG, String.format("RemacsActivity.onCreate: %s - %s",
+                                 getIntent().getAction(),
+                                 getIntent().getDataString()));
 
         mServiceConnection = new RemacsServiceConnection();
         setContentView(R.layout.console_view);
@@ -68,6 +70,9 @@ public class RemacsActivity extends Activity
     @Override protected void onStart()
     {
         super.onStart();
+        Log.d(TAG, String.format("RemacsActivity.onStart: %s - %s",
+                                 getIntent().getAction(),
+                                 getIntent().getDataString()));
         loadPrefs();
         mView.setup(this, mRcfg, mCfg);
         doBindService();
@@ -76,6 +81,34 @@ public class RemacsActivity extends Activity
     @Override protected void onResume()
     {
         super.onResume();
+        Log.d(TAG, String.format("RemacsActivity.onResume: %s - %s",
+                                 getIntent().getAction(),
+                                 getIntent().getDataString()));
+    }
+
+    @Override protected void onPause()
+    {
+        super.onPause();
+        Log.d(TAG, String.format("RemacsActivity.onPause: %s - %s",
+                                 getIntent().getAction(),
+                                 getIntent().getDataString()));
+    }
+
+    @Override protected void onStop()
+    {
+        super.onStop();
+        Log.d(TAG, String.format("RemacsActivity.onStop: %s - %s",
+                                 getIntent().getAction(),
+                                 getIntent().getDataString()));
+    }
+
+    @Override protected void onNewIntent (Intent intent)
+    {
+        super.onNewIntent(intent);
+        Log.d(TAG, String.format("RemacsActivity.onNewIntent: %s - %s",
+                                 intent.getAction(),
+                                 intent.getDataString()));
+        setIntent(intent);
     }
 
     @Override public boolean onCreateOptionsMenu(Menu menu)

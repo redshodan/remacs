@@ -118,12 +118,12 @@ class Client(object):
                     error = child.firstChild.data
                     self.tray.error(error)
                 elif child.nodeName == "notify":
-                    if child.getAttribute("type") == "set":
+                    if elem.getAttribute("type") == "set":
                         title = child.firstChild.firstChild.data
                         body = child.firstChild.nextSibling.firstChild.data
                         self.tray.notify(child.getAttribute("id"),
                                          title + " : " + body)
-                    elif child.getAttribute("type") == "result":
+                    elif elem.getAttribute("type") == "result":
                         self.tray.clearNotify(child.getAttribute("id"))
                 elif child.nodeName == "suspend":
                     self.emacs_suspended = True

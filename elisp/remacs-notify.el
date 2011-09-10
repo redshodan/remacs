@@ -40,11 +40,10 @@
   (set-alist 'remacs-notify-alist (format "%s" remacs-notify-counter)
              (list title body cb))
   (let* ((query (remacs-query 'notify "set"))
-        (notify (xml-get-child query 'notify)))
-    (message "notify %s" query)
+         (notify (xml-get-child query 'notify)))
     (xml-put-child notify 'title title)
     (xml-put-child notify 'body body)
-    (message "notify after %s" query)
+    (xml-put-attribute notify 'id (format "%s" remacs-notify-counter))
     (remacs-send-xml query)))
 
 (defun remacs-notify-invoke (id proc ack-only)

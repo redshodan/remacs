@@ -117,7 +117,7 @@ public class RemacsService extends Service
             Log.d(TAG, String.format("nodename: %s", cmd.getNodeName()));
             if (cmd.getNodeName().compareTo("query") == 0)
             {
-                Node child = document.getFirstChild();
+                Node child = cmd.getFirstChild();
                 if (child.getNodeName().compareTo("error") == 0)
                 {
                     handleError(cmd, child, data);
@@ -189,8 +189,14 @@ public class RemacsService extends Service
             new Notification(R.drawable.emacs, title,
                              System.currentTimeMillis());
 
-        Intent intent = new Intent(this, RemacsActivity.class);
-        PendingIntent pending = PendingIntent.getActivity(this, 0, intent, 0);
+        Intent intent =
+            new Intent(Intent.ACTION_VIEW,
+                       Uri.parse(String.format("remacs://%s/notify#%d",
+                                               "host", id)));
+        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        PendingIntent pending =
+            PendingIntent.getActivity(this, 0, intent,
+                                      PendingIntent.FLAG_UPDATE_CURRENT);
         notification.setLatestEventInfo(this, title, body, pending);
         mNotifMap.put(mNotifCounter, new RemacsNotif(id, title, body));
         mNotifCounter++;
@@ -199,7 +205,9 @@ public class RemacsService extends Service
 
     public void handleSuspend(Node cmd, Node child, String data)
     {
-        Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse("minimize://"));
+        Intent intent =
+            new Intent(Intent.ACTION_VIEW,
+                       Uri.parse(String.format("remacs://%s/minimize", "host")));
         startActivity(intent);
     }
 }

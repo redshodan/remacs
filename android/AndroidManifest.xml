@@ -3,7 +3,7 @@
     package="org.codepunks.remacs">
 
     <application android:label="@string/remacs_app">
-        <activity android:name=".RemacsActivity">
+        <activity android:name=".RemacsActivity" android:launchMode="singleTop">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -11,7 +11,7 @@
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
 				<category android:name="android.intent.category.DEFAULT" />
-				<data android:scheme="minimize" />
+				<data android:scheme="remacs" />
             </intent-filter>
         </activity>
 		<activity android:name=".RemacsSettings" />
