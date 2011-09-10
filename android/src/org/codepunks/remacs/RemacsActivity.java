@@ -65,6 +65,9 @@ public class RemacsActivity extends Activity
         mServiceConnection = new RemacsServiceConnection();
         setContentView(R.layout.console_view);
         mView = (ConsoleView) findViewById(R.id.console);
+        loadPrefs();
+        mView.setup(this, mRcfg, mCfg);
+        doBindService();
     }
 
     @Override protected void onStart()
@@ -73,17 +76,15 @@ public class RemacsActivity extends Activity
         Log.d(TAG, String.format("RemacsActivity.onStart: %s - %s",
                                  getIntent().getAction(),
                                  getIntent().getDataString()));
-        loadPrefs();
-        mView.setup(this, mRcfg, mCfg);
-        doBindService();
     }
         
     @Override protected void onResume()
     {
         super.onResume();
-        Log.d(TAG, String.format("RemacsActivity.onResume: %s - %s",
-                                 getIntent().getAction(),
-                                 getIntent().getDataString()));
+        Log.d(TAG,
+              String.format("RemacsActivity.onResume: %s - %s", 
+                            getIntent().getAction(),
+                            getIntent().getDataString()));
     }
 
     @Override protected void onPause()
@@ -108,7 +109,14 @@ public class RemacsActivity extends Activity
         Log.d(TAG, String.format("RemacsActivity.onNewIntent: %s - %s",
                                  intent.getAction(),
                                  intent.getDataString()));
-        setIntent(intent);
+        String action = intent.getAction();
+        String uri = intent.getDataString();
+        if (action.equals(Intent.ACTION_VIEW) &&
+            (uri.startsWith("remacs://") && uri.endsWith("minimize")))
+        {
+            Log.d(TAG, "Suspending Activity");
+            moveTaskToBack(true);
+        }
     }
 
     @Override public boolean onCreateOptionsMenu(Menu menu)

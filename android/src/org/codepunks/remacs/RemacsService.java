@@ -208,6 +208,7 @@ public class RemacsService extends Service
         Intent intent =
             new Intent(Intent.ACTION_VIEW,
                        Uri.parse(String.format("remacs://%s/minimize", "host")));
+        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         startActivity(intent);
     }
 }
