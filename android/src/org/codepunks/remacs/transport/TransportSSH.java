@@ -7,15 +7,13 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 
-import ch.ethz.ssh2.Connection;
 import ch.ethz.ssh2.ConnectionMonitor;
 import ch.ethz.ssh2.InteractiveCallback;
 import ch.ethz.ssh2.Session;
 import ch.ethz.ssh2.StreamGobbler;
 
-import org.codepunks.remacs.ConnectionCfg;
+import org.codepunks.remacs.Connection;
 import org.codepunks.remacs.RemacsCfg;
-import org.codepunks.remacs.console.ConsoleTTY;
 
 
 public class TransportSSH
@@ -25,21 +23,19 @@ public class TransportSSH
     protected static final String TAG = "Remacs";
     static public final int DEFAULT_PORT = 22;
 
-    protected Connection mConn;
+    protected ch.ethz.ssh2.Connection mSshConn;
     protected Session mSess;
     protected InputStream mStdout;
     protected OutputStream mStdin;
-    protected boolean mConnected;
     
-    public TransportSSH(ConsoleTTY tty, ConnectionCfg cfg)
+    public TransportSSH(Connection conn)
     {
-        super(tty, cfg, DEFAULT_PORT);
-        mConnected = false;
+        super(conn, DEFAULT_PORT);
     }
 
     @Override public void stop()
     {
-        mConn.close();
+        mSshConn.close();
         super.stop();
     }
 
@@ -48,12 +44,14 @@ public class TransportSSH
         Log.d(TAG, "Connecting...");
         try
         {
-            mConn = new Connection(mCfg.host, mCfg.getPort());
-            mConn.addConnectionMonitor(this);
-            mConn.connect();
-            mConn.authenticateWithPassword(mCfg.user, mCfg.pass);
+            mSshConn = new ch.ethz.ssh2.Connection(mConn.getConfig().host,
+                                                   mConn.getConfig().getPort());
+            mSshConn.addConnectionMonitor(this);
+            mSshConn.connect();
+            mSshConn.authenticateWithPassword(mConn.getConfig().user,
+                                           mConn.getConfig().pass);
 
-            mSess = mConn.openSession();
+            mSess = mSshConn.openSession();
 			mSess.execCommand("remacs --server");
             // mSess.requestPTY(mCfg.term, mCfg.term_width, mCfg.term_height, 0, 0,
             //                  null);
@@ -61,6 +59,7 @@ public class TransportSSH
             mStdout = new StreamGobbler(mSess.getStdout());
             mStdin = mSess.getStdin();
             mConnected = true;
+            Log.d(TAG, "...Connected");
         }
         catch (IOException e)
         {
@@ -100,11 +99,6 @@ public class TransportSSH
     {
     }
 
-    public boolean isConnected()
-    {
-        return mConnected;
-    }
-    
     /*
      * ConnectionMonitor interface
      */
@@ -112,7 +106,7 @@ public class TransportSSH
     {
         Log.i(TAG, "Connection lost");
         mConnected = false;
-        // super.stop();
+        stop();
 	}
 
 	public String[] replyToChallenge(String name, String instruction,

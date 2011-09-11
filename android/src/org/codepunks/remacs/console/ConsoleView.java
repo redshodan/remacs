@@ -21,11 +21,9 @@ import android.view.View.OnKeyListener;
 
 import de.mud.terminal.VDUBuffer;
 
-import org.codepunks.remacs.ConnectionCfg;
-import org.codepunks.remacs.RemacsActivity;
+import org.codepunks.remacs.Connection;
 import org.codepunks.remacs.RemacsCfg;
 import org.codepunks.remacs.transport.Transport;
-import org.codepunks.remacs.transport.TransportSSH;
 
 
 public class ConsoleView extends View
@@ -33,11 +31,8 @@ public class ConsoleView extends View
     protected static final String TAG = "Remacs";
 	public static final long VIBRATE_DURATION = 30;
 
-    protected RemacsActivity mAct;
-    protected RemacsCfg mRcfg;
     protected ConsoleTTY mTty;
-    protected Transport mTransport;
-    protected ConnectionCfg mCfg;
+    protected Connection mConn;
     protected Vibrator mVibrator;
 	protected Bitmap mBitmap;
     protected Canvas mCanvas;
@@ -46,6 +41,8 @@ public class ConsoleView extends View
 	protected int mCharWidth;
 	protected int mCharHeight;
 	protected int mCharTop;
+    protected byte[] mWAttrs;
+    protected float[] mWidths;
 	// Cursor paints to distinguish modes
 	protected Paint mCursorPaint;
 	protected Paint mCursorStrokePaint;
@@ -99,18 +96,16 @@ public class ConsoleView extends View
 		mScaleSrc.set(0.0f, 0.0f, 1.0f, 1.0f);
 		mScaleDst = new RectF();
 		mScaleMatrix = new Matrix();
+
+        mWAttrs = new byte[Transport.BUFFER_SIZE];
+        mWidths = new float[Transport.BUFFER_SIZE];
     }
 
-    public void setup(RemacsActivity act, RemacsCfg rcfg, ConnectionCfg cfg)
+    public void setup(Connection conn)
     {
-        mAct = act;
-        mRcfg = rcfg;
-        mCfg = cfg;
-        mTty = new ConsoleTTY(this, mCfg);
+        mConn = conn;
+        mTty = new ConsoleTTY(this, mConn);
         setOnKeyListener(mTty);
-        mTransport = new TransportSSH(mTty, mCfg);
-        mTty.setTransport(mTransport);
-        mTransport.start();
 
         mCursorPaint.setColor(mTty.getColors()[Colors.WHITE]);
 		mCursorPaint.setXfermode(
@@ -122,14 +117,21 @@ public class ConsoleView extends View
         mTty.putString(str);
     }
 
-    public void getTextWidths(char[] chars, int offset, float[] widths)
+    public void putString(char[] s, int length)
     {
-        mPaint.getTextWidths(chars, 0, offset, widths);
-    }
-
-    public int getCharWidth()
-    {
-        return mCharWidth;
+        mPaint.getTextWidths(s, 0, length, mWidths);
+        for (int i = 0; i < length; ++i)
+        {
+            if ((int)mWidths[i] != mCharWidth)
+            {
+                mWAttrs[i] = (byte)1;
+            }
+            else
+            {
+                mWAttrs[i] = (byte)0;
+            }
+        }
+        mTty.putString(s, mWAttrs, length);
     }
 
 	@Override public void onDraw(Canvas pcanvas)
@@ -353,13 +355,13 @@ public class ConsoleView extends View
         mPaint.getTextWidths("X", widths);
         mCharWidth = (int)Math.ceil(widths[0]);
         mCharHeight = (int)Math.ceil(fm.descent - fm.top);
-        mCfg.term_width = width / mCharWidth;
-        mCfg.term_height = height / mCharHeight;
+        int tw = width / mCharWidth;
+        int th = height / mCharHeight;
 
         Log.d(TAG, String.format("Setting term size (%d,%d) (%d,%d)",
-                                 width, height,
-                                 mCfg.term_width, mCfg.term_height));
-        mTty.getBuffer().setScreenSize(mCfg.term_width, mCfg.term_height, false);
+                                 width, height, tw, th));
+        mConn.setTTY(tw, th, null);
+        mTty.getBuffer().setScreenSize(tw, th, false);
         
         // Create a scale matrix to scale our 1x1 representation of the cursor
         mScaleDst.set(0.0f, 0.0f, mCharWidth, mCharHeight);
@@ -377,11 +379,6 @@ public class ConsoleView extends View
     public void finish()
     {
         Log.d(TAG, "ConsoleView.finish()");
-        mTransport.stop();
-    }
-
-    public void handleCmd(String data)
-    {
-        mAct.handleCmd(data);
+        mConn.stop();
     }
 }

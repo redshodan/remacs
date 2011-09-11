@@ -10,28 +10,34 @@ import de.mud.terminal.vt320;
 
 import java.io.IOException;
 
-import org.codepunks.remacs.transport.Transport;
+import org.codepunks.remacs.Connection;
 
 
 public class ConsoleBuffer extends vt320
 {
     protected static final String TAG = "Remacs";
 
-    public Transport mTransport;
+    protected Connection mConn;
+
+    public ConsoleBuffer(Connection conn)
+    {
+        super();
+        mConn = conn;
+    }
         
     @Override public void write(byte[] b)
     {
-        if ((b != null) && (mTransport != null))
+        if ((b != null) && (mConn != null))
         {
-            mTransport.sendData(b);
+            mConn.sendData(b);
         }
     }
         
     @Override public void write(int b)
     {
-        if (mTransport != null)
+        if (mConn != null)
         {
-            mTransport.sendData(b);
+            mConn.sendData(b);
         }
     }
         

@@ -1,10 +1,11 @@
 package org.codepunks.remacs;
 
 import android.app.Activity;
+import android.app.NotificationManager;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
-import android.content.ServiceConnection;
+// import android.content.ServiceConnection;
 import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.os.Debug;
@@ -16,7 +17,7 @@ import android.view.MenuItem;
 import android.view.View;
 import android.widget.TextView;
 
-import org.codepunks.remacs.RemacsService;
+// import org.codepunks.remacs.RemacsService;
 import org.codepunks.remacs.console.ConsoleView;
 
 
@@ -24,29 +25,28 @@ public class RemacsActivity extends Activity
 {
     protected static final String TAG = "Remacs";
 
-    private class RemacsServiceConnection implements ServiceConnection
-    {
-        public void onServiceConnected(ComponentName className, IBinder service)
-        {
-            Log.d(TAG, "RemacsServiceConnection.onServiceConnected");
-            mService = ((RemacsService.RemacsBinder)service).getService();
-        }
+    // private class RemacsServiceConnection implements ServiceConnection
+    // {
+    //     public void onServiceConnected(ComponentName className, IBinder service)
+    //     {
+    //         Log.d(TAG, "RemacsServiceConnection.onServiceConnected");
+    //         mService = ((RemacsService.RemacsBinder)service).getService();
+    //     }
         
-        public void onServiceDisconnected(ComponentName className)
-        {
-            Log.d(TAG, "RemacsServiceConnection.onServiceDisconnected");
-            mService = null;
-        }
-    };
+    //     public void onServiceDisconnected(ComponentName className)
+    //     {
+    //         Log.d(TAG, "RemacsServiceConnection.onServiceDisconnected");
+    //         mService = null;
+    //     }
+    // };
 
     protected static final int MENU_QUIT = Menu.FIRST;
 
     protected RemacsCfg mRcfg;
-    protected ConnectionCfg mCfg;
-    protected ConsoleView mView;
-    protected RemacsService mService;
-    protected ServiceConnection mServiceConnection;
-    protected boolean mIsBound = false;
+    protected Connection mConn;
+    // protected RemacsService mService;
+    // protected ServiceConnection mServiceConnection;
+    // protected boolean mIsBound = false;
     
     public RemacsActivity()
     {
@@ -62,12 +62,10 @@ public class RemacsActivity extends Activity
                                  getIntent().getAction(),
                                  getIntent().getDataString()));
 
-        mServiceConnection = new RemacsServiceConnection();
+        // mServiceConnection = new RemacsServiceConnection();
         setContentView(R.layout.console_view);
-        mView = (ConsoleView) findViewById(R.id.console);
         loadPrefs();
-        mView.setup(this, mRcfg, mCfg);
-        doBindService();
+        // doBindService();
     }
 
     @Override protected void onStart()
@@ -76,6 +74,13 @@ public class RemacsActivity extends Activity
         Log.d(TAG, String.format("RemacsActivity.onStart: %s - %s",
                                  getIntent().getAction(),
                                  getIntent().getDataString()));
+        if (!mConn.started())
+        {
+            ConsoleView view = (ConsoleView) findViewById(R.id.console);
+            NotificationManager nm =
+                (NotificationManager)getSystemService(NOTIFICATION_SERVICE);
+            mConn.start(view, nm);
+        }
     }
         
     @Override protected void onResume()
@@ -101,6 +106,7 @@ public class RemacsActivity extends Activity
         Log.d(TAG, String.format("RemacsActivity.onStop: %s - %s",
                                  getIntent().getAction(),
                                  getIntent().getDataString()));
+        mConn.stop();
     }
 
     @Override protected void onNewIntent (Intent intent)
@@ -155,32 +161,32 @@ public class RemacsActivity extends Activity
     @Override public void finish()
     {
         Log.d(TAG, "RemacsActivity.finish()");
-        mView.finish();
+        mConn.finish();
         super.finish();
     }
 
-    protected void doBindService()
-    {
-        Log.d(TAG, "RemacsActivity.doBindService");
-        bindService(new Intent(this, RemacsService.class),
-                    mServiceConnection, Context.BIND_AUTO_CREATE);
-        mIsBound = true;
-    }
+    // protected void doBindService()
+    // {
+    //     Log.d(TAG, "RemacsActivity.doBindService");
+    //     bindService(new Intent(this, RemacsService.class),
+    //                 mServiceConnection, Context.BIND_AUTO_CREATE);
+    //     mIsBound = true;
+    // }
 
-    protected void doUnbindService()
-    {
-        Log.d(TAG, "RemacsActivity.doUnbindService");
-        if (mServiceConnection != null)
-        {
-            unbindService(mServiceConnection);
-            mIsBound = false;
-        }
-    }
+    // protected void doUnbindService()
+    // {
+    //     Log.d(TAG, "RemacsActivity.doUnbindService");
+    //     if (mServiceConnection != null)
+    //     {
+    //         unbindService(mServiceConnection);
+    //         mIsBound = false;
+    //     }
+    // }
 
     @Override protected void onDestroy()
     {
         super.onDestroy();
-        doUnbindService();
+        // doUnbindService();
     }
 
     protected void defaultPrefs()
@@ -218,16 +224,12 @@ public class RemacsActivity extends Activity
             defaultPrefs();
         }
 
-        mCfg = new ConnectionCfg();
-        mCfg.set(host, port, user, pass, encoding, term, scrollback);
+        ConnectionCfg cfg = new ConnectionCfg();
+        cfg.set(host, port, user, pass, encoding, term, scrollback);
+        mConn = new Connection(this, mRcfg, cfg);
 
         Log.d(TAG, String.format("config: host=%s port=%d user=%s pass=XXX " +
                                  "encoding=%s term=%s scroll=%d",
                                  host, port, user, encoding, term, scrollback));
-    }
-
-    public void handleCmd(String data)
-    {
-        mService.handleCmd(data);
     }
 }

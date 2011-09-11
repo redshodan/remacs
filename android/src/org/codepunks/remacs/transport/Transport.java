@@ -10,7 +10,7 @@ import java.nio.charset.CharsetDecoder;
 import java.nio.charset.CoderResult;
 import java.nio.charset.CodingErrorAction;
 
-import org.codepunks.remacs.ConnectionCfg;
+import org.codepunks.remacs.Connection;
 import org.codepunks.remacs.RemacsCfg;
 import org.codepunks.remacs.console.ConsoleTTY;
 
@@ -24,54 +24,53 @@ public abstract class Transport implements Runnable
     //  - least significant 3 bits are command.
     //  - middle 4 bits are size of data.
     //  - most significant bit indicates size is number of size bytes.
-    public final long CMD_NONE = -1;
-    public final long CMD_TTY = 0;
-    public final long CMD_CMD = 1;
-    public final long CMD_BLOCK = 2;
-    public final long CMD_MAX = 7;
-    public final long CMD_CMDS = 7;
-    public final long CMD_SIZE_MAX = 15;
-    public final long CMD_SIZE_MAXED = 128;
+    public static final long CMD_NONE = -1;
+    public static final long CMD_TTY = 0;
+    public static final long CMD_CMD = 1;
+    public static final long CMD_BLOCK = 2;
+    public static final long CMD_MAX = 7;
+    public static final long CMD_CMDS = 7;
+    public static final long CMD_SIZE_MAX = 15;
+    public static final long CMD_SIZE_MAXED = 128;
 
-    protected ConsoleTTY mTty;
-    protected ConnectionCfg mCfg;
+    protected Connection mConn;
     protected Thread mThread;
+    protected boolean mConnected;
     // String decoding
     protected CharsetDecoder mDecoder;
     protected ByteBuffer mBBuff;
     protected CharBuffer mCBuff;
     protected byte[] mBytes;
     protected char[] mChars;
-    protected byte[] mWAttrs;
-    protected float[] mWidths;
-    protected int mCWidth;
     // Remacs Protocol handling
     protected long mCmd = CMD_NONE;
     protected long mCmdLength = 0;
-    protected byte[] mCharBuff = new byte[1];
     
-    public Transport(ConsoleTTY tty, ConnectionCfg cfg, int def_port)
+    public Transport(Connection conn, int def_port)
     {
-        mTty = tty;
-        mCfg = cfg;
-        //mCfg.def_port = def_port;
-        Charset cs = Charset.forName(mCfg.charset);
+        mConn = conn;
+        // mConn.getConfig().setDefaultPort(def_port);
+        Charset cs = Charset.forName(mConn.getConfig().charset);
         mDecoder = cs.newDecoder();
         mDecoder.onUnmappableCharacter(CodingErrorAction.REPLACE);
         mDecoder.onMalformedInput(CodingErrorAction.REPLACE);
+        mConnected = false;
     }
 
     public void putString(String str)
     {
-        mTty.putString(str);
+        mConn.putString(str);
     }
 
     public void sendCmd(long cmd, String data)
     {
-        Log.d(TAG, String.format("Sending cmd=%d: %s", cmd, data));
         try
         {
-            sendCmd(cmd, data.getBytes(mCfg.charset));
+            if (cmd == CMD_CMD)
+            {
+                Log.d(TAG, String.format("Sending cmd=%s", data));
+            }
+            sendCmd(cmd, data.getBytes(mConn.getConfig().charset));
         }
         catch (UnsupportedEncodingException ex)
         {
@@ -84,7 +83,7 @@ public abstract class Transport implements Runnable
         try
         {
             long length = data.length;
-            Log.d(TAG, String.format("Sending cmd=%d len=%d", cmd, length));
+            // Log.d(TAG, String.format("Sending cmd=%d len=%d", cmd, length));
 
             if ((data != null) && (length > 0))
             {
@@ -126,35 +125,10 @@ public abstract class Transport implements Runnable
         }
     }
 
-    public void sendTTY()
-    {
-        String data =
-            String.format("<query><setup><tty term='%s' row='%d' col='%d'/>" +
-                          "</setup></query>", mCfg.term, mCfg.term_height,
-                          mCfg.term_width);
-        sendCmd(CMD_CMD, data);
-    }
-
-    public void sendData(String data)
-    {
-        sendCmd(CMD_TTY, data);
-    }
-    
-    public void sendData(byte[] data)
-    {
-        sendCmd(CMD_TTY, data);
-    }
-
-    public void sendData(int data)
-    {
-        mCharBuff[0] = (byte)(data & 0xFF);
-        sendCmd(CMD_TTY, mCharBuff);
-    }
-    
     public void run()
     {
         connect();
-        sendTTY();
+        mConn.sendTTY();
         
         try
         {
@@ -163,9 +137,6 @@ public abstract class Transport implements Runnable
             mCBuff = CharBuffer.allocate(BUFFER_SIZE);
             mBytes = mBBuff.array();
             mChars = mCBuff.array();
-            mWAttrs = new byte[BUFFER_SIZE];
-            mWidths = new float[BUFFER_SIZE];
-            mCWidth = mTty.getCharWidth();
 
             mBBuff.limit(0);
             do
@@ -191,13 +162,13 @@ public abstract class Transport implements Runnable
                         {
                             mCmd = mBBuff.get();
                             mCmd = (mCmd & 0xFF);
-                            Log.d(TAG, String.format("unpacked cmd=%d", mCmd));
+                            // Log.d(TAG, String.format("unpacked cmd=%d", mCmd));
                         }
                         if (mCmdLength == 0)
                         {
                             if ((mCmd & CMD_SIZE_MAXED) != 0)
                             {
-                                Log.d(TAG, "size maxed, getting next 4 bytes");
+                                // Log.d(TAG, "size maxed, getting next 4 bytes");
                                 try
                                 {
                                     mCmdLength = mBBuff.getInt();
@@ -212,17 +183,17 @@ public abstract class Transport implements Runnable
                                 mCmdLength = mCmd >> 3;
                             }
                             mCmd = mCmd & CMD_CMDS;
-                            Log.d(TAG,
-                                  String.format("Decoded mCmd=%d mCmdLength=%d",
-                                                mCmd, mCmdLength));
+                            // Log.d(TAG,
+                            //       String.format("Decoded mCmd=%d mCmdLength=%d",
+                            //                     mCmd, mCmdLength));
                         }
                         int blen = mBBuff.remaining();
                         if (blen < mCmdLength)
                         {
-                            Log.d(TAG,
-                                  String.format(
-                                      "need more: blen=%d mCmdLength=%d",
-                                      blen, mCmdLength));
+                            // Log.d(TAG,
+                            //       String.format(
+                            //           "need more: blen=%d mCmdLength=%d",
+                            //           blen, mCmdLength));
                             continue;
                         }
                         else 
@@ -252,7 +223,7 @@ public abstract class Transport implements Runnable
 
         if (mBBuff.remaining() > length)
         {
-            Log.d(TAG, "Extra data, limiting buffer");
+            // Log.d(TAG, "Extra data, limiting buffer");
             oldlim = mBBuff.limit();
             mBBuff.limit(mBBuff.position() + length);
         }
@@ -266,31 +237,18 @@ public abstract class Transport implements Runnable
             mBBuff.position(0);
         }
 
-        Log.d(TAG, String.format("decodeStringData: length=%d size=%d", length,
-                                 mCBuff.position()));
+        // Log.d(TAG, String.format("decodeStringData: length=%d size=%d", length,
+        //                          mCBuff.position()));
         if (mCmd == CMD_TTY)
         {
-            Log.d(TAG, "TTY DATA");
-            mTty.getTextWidths(mChars, length, mWidths);
-            for (int i = 0; i < length; ++i)
-            {
-                if ((int)mWidths[i] != mCWidth)
-                {
-                    mWAttrs[i] = (byte)1;
-                }
-                else
-                {
-                    mWAttrs[i] = (byte)0;
-                }
-            }
-            mTty.putString(mChars, mWAttrs, 0, length);
-            mTty.redraw();
+            // Log.d(TAG, "TTY DATA");
+            mConn.putString(mChars, length);
         }
         else if (mCmd == CMD_CMD)
         {
             String data = new String(mChars, 0, length);
             Log.d(TAG, String.format("CMD: %s", data));
-            mTty.handleCmd(data);
+            mConn.handleCmd(data);
         }
         
         mCBuff.clear();
@@ -311,6 +269,11 @@ public abstract class Transport implements Runnable
     public void stop()
     {
         mThread.interrupt();
+    }
+
+    public boolean isConnected()
+    {
+        return mConnected;
     }
     
     public abstract void connect();

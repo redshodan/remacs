@@ -14,9 +14,8 @@ import de.mud.terminal.vt320;
 
 import java.io.IOException;
 
-import org.codepunks.remacs.ConnectionCfg;
+import org.codepunks.remacs.Connection;
 import org.codepunks.remacs.RemacsCfg;
-import org.codepunks.remacs.transport.Transport;
 
 
 public class ConsoleTTY implements VDUDisplay, OnKeyListener
@@ -39,30 +38,23 @@ public class ConsoleTTY implements VDUDisplay, OnKeyListener
     public final static int MOD_FAKE_MASK = MOD_SLASH | MOD_TAB;
 
     protected ConsoleView mView;
-    protected ConnectionCfg mCfg;
-    protected Transport mTransport;
+    protected Connection mConn;
 	protected ConsoleBuffer mBuffer;
     protected int mModifiers;
     protected Integer[] mColors;
     
-    public ConsoleTTY(ConsoleView view, ConnectionCfg cfg)
+    public ConsoleTTY(ConsoleView view, Connection conn)
     {
         mView = view;
-        mCfg = cfg;
-        mBuffer = new ConsoleBuffer();
+        mConn = conn;
+        mBuffer = new ConsoleBuffer(mConn);
         mBuffer.setDisplay(this);
-        mBuffer.setBufferSize(mCfg.term_scrollback);
-        mBuffer.setTerminalID(mCfg.term);
-        mBuffer.setAnswerBack(mCfg.term);
+        mBuffer.setBufferSize(mConn.getConfig().term_scrollback);
+        mBuffer.setTerminalID(mConn.getConfig().term);
+        mBuffer.setAnswerBack(mConn.getConfig().term);
         mBuffer.setBackspace(vt320.DELETE_IS_DEL);
 
         resetColors();
-    }
-
-    public void setTransport(Transport transport)
-    {
-        mTransport = transport;
-        mBuffer.mTransport = transport;
     }
 
     public void putString(String str)
@@ -70,9 +62,10 @@ public class ConsoleTTY implements VDUDisplay, OnKeyListener
         mBuffer.putString(str);
     }
 
-    public void putString(char[] s, byte[] wattrs, int start, int len)
+    public void putString(char[] s, byte[] wattrs, int length)
     {
-        mBuffer.putString(s, wattrs, start, len);
+        mBuffer.putString(s, wattrs, 0, length);
+        redraw();
     }
 
     public ConsoleBuffer getBuffer()
@@ -80,16 +73,6 @@ public class ConsoleTTY implements VDUDisplay, OnKeyListener
         return mBuffer;
     }
     
-    public void getTextWidths(char[] chars, int offset, float[] widths)
-    {
-        mView.getTextWidths(chars, offset, widths);
-    }
-
-    public int getCharWidth()
-    {
-        return mView.getCharWidth();
-    }
-
     public Integer[] getColors()
     {
         return mColors;
@@ -226,13 +209,13 @@ public class ConsoleTTY implements VDUDisplay, OnKeyListener
                 modPress(MOD_ALT_ON);
                 return true;
             case KeyEvent.KEYCODE_ALT_RIGHT:
-                mTransport.sendData(0x9); // TAB
+                mConn.sendData(0x9); // TAB
                 return true;
             case KeyEvent.KEYCODE_SHIFT_LEFT:
                 modPress(MOD_SHIFT_ON);
                 return true;
             case KeyEvent.KEYCODE_SHIFT_RIGHT:
-                mTransport.sendData("/");
+                mConn.sendData("/");
                 return true;
             case KeyEvent.KEYCODE_1:
             case KeyEvent.KEYCODE_2:
@@ -287,20 +270,20 @@ public class ConsoleTTY implements VDUDisplay, OnKeyListener
                                 
                 if (modchar < 0x80)
                 {
-                    mTransport.sendData(modchar);
+                    mConn.sendData(modchar);
                 }
                 else
                 {
-                    mTransport.sendData(new String(Character.toChars(modchar))
-                                        .getBytes(mCfg.charset));
+                    mConn.sendData(new String(Character.toChars(modchar))
+                                        .getBytes(mConn.getConfig().charset));
                 }
                 return true;
             }
             else if ((keycode == KeyEvent.KEYCODE_UNKNOWN) &&
                      (event.getAction() == KeyEvent.ACTION_MULTIPLE))
             {
-                mTransport.sendData(
-                    event.getCharacters().getBytes(mCfg.charset));
+                mConn.sendData(
+                    event.getCharacters().getBytes(mConn.getConfig().charset));
                 return true;
             }
         }
@@ -378,9 +361,4 @@ public class ConsoleTTY implements VDUDisplay, OnKeyListener
     {
         mColors = Colors.DEFAULT_COLORS.clone();
 	}
-
-    public void handleCmd(String data)
-    {
-        mView.handleCmd(data);
-    }
 }
