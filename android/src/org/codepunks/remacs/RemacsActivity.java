@@ -7,6 +7,7 @@ import android.content.Context;
 import android.content.Intent;
 // import android.content.ServiceConnection;
 import android.content.SharedPreferences;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Debug;
 import android.os.IBinder;
@@ -44,6 +45,7 @@ public class RemacsActivity extends Activity
 
     protected RemacsCfg mRcfg;
     protected Connection mConn;
+    protected RemacsNotify mNotify;
     // protected RemacsService mService;
     // protected ServiceConnection mServiceConnection;
     // protected boolean mIsBound = false;
@@ -62,6 +64,9 @@ public class RemacsActivity extends Activity
                                  getIntent().getAction(),
                                  getIntent().getDataString()));
 
+        NotificationManager nm =
+            (NotificationManager)getSystemService(NOTIFICATION_SERVICE);
+        mNotify = new RemacsNotify(this, nm);
         // mServiceConnection = new RemacsServiceConnection();
         setContentView(R.layout.console_view);
         loadPrefs();
@@ -77,9 +82,7 @@ public class RemacsActivity extends Activity
         if (!mConn.started())
         {
             ConsoleView view = (ConsoleView) findViewById(R.id.console);
-            NotificationManager nm =
-                (NotificationManager)getSystemService(NOTIFICATION_SERVICE);
-            mConn.start(view, nm);
+            mConn.start(view, mNotify);
         }
     }
         
@@ -107,21 +110,39 @@ public class RemacsActivity extends Activity
                                  getIntent().getAction(),
                                  getIntent().getDataString()));
         mConn.stop();
+        mNotify.stop();
     }
 
-    @Override protected void onNewIntent (Intent intent)
+    @Override protected void onNewIntent(Intent intent)
     {
         super.onNewIntent(intent);
         Log.d(TAG, String.format("RemacsActivity.onNewIntent: %s - %s",
                                  intent.getAction(),
                                  intent.getDataString()));
         String action = intent.getAction();
-        String uri = intent.getDataString();
-        if (action.equals(Intent.ACTION_VIEW) &&
-            (uri.startsWith("remacs://") && uri.endsWith("minimize")))
+        if (action.equals(Intent.ACTION_VIEW))
         {
-            Log.d(TAG, "Suspending Activity");
-            moveTaskToBack(true);
+            Uri uri = intent.getData();
+            boolean notify = uri.getPath().equals("/notify");
+            boolean clear = uri.getPath().equals("/notify-clear");
+            if (notify || clear)
+            {
+                Integer id = -1;
+                try
+                {
+                    id = Integer.valueOf(uri.getFragment());
+                }
+                catch (NumberFormatException e)
+                {
+                    Log.e(TAG, "Invalid notify URI", e);
+                    return;
+                }
+                mNotify.respondNotify(id, notify, mConn);
+            }
+            else if (uri.getPath().equals("/minimize"))
+            {
+                suspend();
+            }
         }
     }
 
@@ -189,6 +210,12 @@ public class RemacsActivity extends Activity
         // doUnbindService();
     }
 
+    public void suspend()
+    {
+        Log.d(TAG, "Suspending Activity");
+        moveTaskToBack(true);
+    }
+    
     protected void defaultPrefs()
     {
         mRcfg = new RemacsCfg();

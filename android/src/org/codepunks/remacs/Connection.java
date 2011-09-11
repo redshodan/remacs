@@ -1,6 +1,5 @@
 package org.codepunks.remacs;
 
-import android.app.Notification;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Intent;
@@ -8,10 +7,7 @@ import android.net.Uri;
 import android.util.Log;
 
 import java.io.*;
-import java.util.HashMap;
-import java.util.Map;
 import javax.xml.parsers.*;
-
 import org.w3c.dom.*;
 import org.xml.sax.*;
 
@@ -25,29 +21,13 @@ public class Connection
 {
     protected static final String TAG = "Remacs";
     
-    public class RemacsNotif
-    {
-        public RemacsNotif(int id, String title, String body)
-        {
-            this.id = id;
-            this.title = title;
-            this.body = body;
-        }
-        
-        public int id;
-        public String title;
-        public String body;
-    }
-
     protected RemacsActivity mAct;
     protected RemacsCfg mRcfg;
     protected ConnectionCfg mCfg;
     protected Transport mTransport;
     protected ConsoleView mView;
+    protected RemacsNotify mNotify;
 
-    protected NotificationManager mNM;
-    protected Map<Integer, RemacsNotif> mNotifMap;
-    protected int mNotifCounter = 0;
     protected DocumentBuilder mParser;
     protected byte[] mCharBuff = new byte[1];
 
@@ -58,7 +38,6 @@ public class Connection
         mAct = act;
         mRcfg = rcfg;
         mCfg = cfg;
-        mNotifMap = new HashMap<Integer, RemacsNotif>();
 
         try
         {
@@ -72,11 +51,11 @@ public class Connection
         }
     }
 
-    public void start(ConsoleView view, NotificationManager nm)
+    public void start(ConsoleView view, RemacsNotify notify)
     {
-        mNM = nm;
         mView = view;
         mView.setup(this);
+        mNotify = notify;
         mTransport = new TransportSSH(this);
         mTransport.start();
     }
@@ -84,7 +63,6 @@ public class Connection
     public void stop()
     {
         mTransport.stop();
-        mNM.cancel(1);
     }
 
     public void finish()
@@ -134,6 +112,19 @@ public class Connection
             String.format("<query><setup><tty term='%s' row='%d' col='%d'/>" +
                           "</setup></query>", mCfg.term, mCfg.term_height,
                           mCfg.term_width);
+        mTransport.sendCmd(Transport.CMD_CMD, data);
+    }
+
+    public void respondNotify(Integer id, boolean invoke)
+    {
+        String child = "";
+        if (invoke)
+        {
+            child = "<invoke/>";
+        }
+        String data =
+            String.format("<query><notify id='%d' type='result'>%s</notify>" +
+                          "</query>", id, child);
         mTransport.sendCmd(Transport.CMD_CMD, data);
     }
 
@@ -187,7 +178,7 @@ public class Connection
         }
         catch (Exception e)
         {
-            Log.e(TAG, "Failed handling command: " + e.toString());
+            Log.e(TAG, "Failed handling command", e);
         }
     }
     
@@ -217,42 +208,23 @@ public class Connection
         }
         else
         {
-            showNotification(id, title, body);
+            mNotify.showNotify(id, title, body);
         }
     }
     
     public void handleError(Node cmd, Node child, String data)
     {
         String error = child.getNodeValue();
-        showNotification(-1, "Error", error);
-    }
-
-    protected void showNotification(int id, String title, String body)
-    {
-        Notification notification =
-            new Notification(R.drawable.emacs, title,
-                             System.currentTimeMillis());
-
-        Intent intent =
-            new Intent(Intent.ACTION_VIEW,
-                       Uri.parse(String.format("remacs://%s/notify#%d",
-                                               "host", id)));
-        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        PendingIntent pending =
-            PendingIntent.getActivity(mAct, 0, intent,
-                                      PendingIntent.FLAG_UPDATE_CURRENT);
-        notification.setLatestEventInfo(mAct, title, body, pending);
-        mNotifMap.put(mNotifCounter, new RemacsNotif(id, title, body));
-        mNotifCounter++;
-        mNM.notify(id, notification);
+        mNotify.showNotify(-1, "Error", error);
     }
 
     public void handleSuspend(Node cmd, Node child, String data)
     {
-        Intent intent =
-            new Intent(Intent.ACTION_VIEW,
-                       Uri.parse(String.format("remacs://%s/minimize", "host")));
-        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        mAct.startActivity(intent);
+        // Intent intent =
+        //     new Intent(Intent.ACTION_VIEW,
+        //                Uri.parse(String.format("remacs://%s/minimize", "host")));
+        // intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        // mAct.startActivity(intent);
+        mAct.suspend();
     }
 }
