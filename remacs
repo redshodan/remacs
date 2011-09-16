@@ -40,6 +40,7 @@ from optparse import OptionParser
 import remacs
 from remacs import log
 from remacs.server import Server
+from remacs.sslserver import SSLServerPort
 from remacs.client import Client
 
 
@@ -51,6 +52,10 @@ if __name__ == "__main__":
     parser = OptionParser(usage="Usage: %prog [options] <hostname>")
     parser.add_option("-s", "--server", action="store_true", dest="server",
                       default=False, help="Run in server mode")
+    parser.add_option("-S", "--sslserver", action="store_true", dest="sslserver",
+                      default=False, help="Run in sslserver mode")
+    parser.add_option("-P", "--sslport", dest="sslport",
+                      default="4747", help="Sets sslserver port")
     parser.add_option("-t", "--transport", dest="transport", default="ssh",
                       help="Transport program. ie: ssh")
     parser.add_option("-X", "--no-x", action="store_true", dest="no_x",
@@ -63,6 +68,10 @@ if __name__ == "__main__":
     if options.server:
         log.init("server")
         server = Server(options)
+        server.run()
+    elif options.sslserver:
+        log.init("sslserver")
+        server = SSLServerPort(options)
         server.run()
     elif len(args) != 1:
         parser.print_help()

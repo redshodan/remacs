@@ -1,0 +1,16 @@
+--- third_party/M2Crypto-0.21.1/M2Crypto/SSL/Connection.py	2011-01-15 12:10:05.000000000 -0700
++++ build/python/M2Crypto/SSL/Connection.py	2011-09-16 08:34:48.824149000 -0600
+@@ -158,7 +158,12 @@
+         ssl.addr = addr
+         ssl.setup_ssl()
+         ssl.set_accept_state()
+-        ssl.accept_ssl()
++        try:
++            ssl.accept_ssl()
++        except Exception, e:
++            e.sock = sock
++            e.addr = addr
++            raise
+         check = getattr(self, 'postConnectionCheck', self.serverPostConnectionCheck)
+         if check is not None:
+             if not check(ssl.get_peer_cert(), ssl.addr[0]):

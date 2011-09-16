@@ -32,27 +32,40 @@ from remacs.ttymanager import TTYManager
 class Server(object):
     def __init__(self, options):
         self.options = options
+        self.fdin = None
+        self.fdout = None
         self.sock = None
         self.pipe = None
         self.emacs_pid = None
-    
+
+    def setupInOut(self):
+        self.fdin = sys.stdin.fileno()
+        self.fdout = sys.stdout.fileno()
+
+    def setupPipe(self):
+        self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.sock.connect("/tmp/remacs%d/remacs" % os.geteuid())
+        log.info("connected to emacs server")
+        self.sock.setblocking(0)
+        log.debug("sock fd=%d" % self.sock.fileno())
+        self.pipe = self.sock.fileno()
+        log.debug("sock pipe fd: %d" % self.pipe)
+
+    def setupTTY(self):
+        (self.tty, self.slave) = pty.openpty()
+        fcntl.ioctl(self.tty, termios.TIOCSWINSZ,
+                    struct.pack("HHHH", 24, 80, 0, 0))
+        
     def run(self):
         try:
-            self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-            self.sock.connect("/tmp/remacs%d/remacs" % os.geteuid())
-            log.info("connected to emacs server")
-            self.sock.setblocking(0)
-            log.debug("sock fd=%d" % self.sock.fileno())
-            self.pipe = self.sock.fileno()
-            log.debug("sock pipe fd: %d" % self.pipe)
-            (self.tty, self.slave) = pty.openpty()
-            fcntl.ioctl(self.tty, termios.TIOCSWINSZ,
-                        struct.pack("HHHH", 24, 80, 0, 0))
-            self.mgr = TTYManager(sys.stdin.fileno(), sys.stdout.fileno(),
-                                  self.tty, self.cmd_cb,
+            self.setupInOut()
+            self.setupPipe()
+            self.setupTTY()
+            self.mgr = TTYManager(self.fdin, self.fdout, self.tty, self.cmd_cb,
                                   [self.pipe], self.pipe_cb)
             self.mgr.run()
         except Exception, e:
+            log.exception("Main loop exception", e)
             print "Main loop exception: %s %s" % (type(e), str(e))
             import traceback
             traceback.print_exc()
