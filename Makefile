@@ -19,7 +19,7 @@ DIRS=$(shell find python tests -type d)
 BDIRS=$(patsubst %, build/%, $(DIRS)) build/runs
 PYVER=$(shell python -c "import sys; print sys.version[:3]")
 
-all: python
+all: third_party python
 
 build: $(BDIRS) python debug
 
@@ -32,7 +32,7 @@ idle: $(BUILD)/remacs/idle.so
 $(BUILD)/remacs/idle.so: lib/idle.c
 	gcc -g -shared -fPIC -Wall -I /usr/include/python$(PYVER) lib/idle.c -lpython$(PYVER) -lX11 -lXss -o $(BUILD)/remacs/idle.so
 
-third_party:
+third_party: $(BDIRS)
 	make -C third_party
 
 tests: $(BDIRS) clean-run python $(TOBJS)
@@ -41,7 +41,10 @@ tests: $(BDIRS) clean-run python $(TOBJS)
 clean-run:
 	rm -rf build/runs/*
 
-clean: clean-android
+third_party-clean:
+	make -C third_party clean
+
+clean: clean-android third_party-clean
 	rm -rf build
 	find -name '*.pyc' | xargs rm -f
 
@@ -72,4 +75,4 @@ $(BUILD)/%.pyc: python/%.py
 build/tests/%.pyc: tests/%.py
 	python -c "import sys, py_compile; py_compile.compile(sys.argv[1], sys.argv[2], doraise=True)" $< $@
 
-.PHONY: build python idle tests clean-run
+.PHONY: build python idle tests clean-run third_party
