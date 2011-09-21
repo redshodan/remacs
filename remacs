@@ -56,6 +56,10 @@ if __name__ == "__main__":
                       default=False, help="Run in sslserver mode")
     parser.add_option("-P", "--sslport", dest="sslport",
                       default="4747", help="Sets sslserver port")
+    parser.add_option("-c", "--cert", dest="cert", default=None,
+                      help="Cert for ssl mode")
+    parser.add_option("-C", "--cacert", dest="cacert", default=None,
+                      help="CA cert for ssl mode")
     parser.add_option("-t", "--transport", dest="transport", default="ssh",
                       help="Transport program. ie: ssh")
     parser.add_option("-X", "--no-x", action="store_true", dest="no_x",

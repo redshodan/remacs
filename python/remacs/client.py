@@ -32,6 +32,8 @@ from remacs.ttymanager import TTYManager
 class Client(object):
     def __init__(self, options):
         self.options = options
+        self.fdin = None
+        self.fdout = None
         self.emacs_suspended = False
         self.cmd = (self.options.transport + " -T " + self.options.host +
                     " remacs --server")
@@ -63,20 +65,24 @@ class Client(object):
         except Exception, e:
             log.exception("Failed to setup X interface: " + str(e))
 
+    def setupInOut(self):
+        self.pipe = subprocess.Popen(self.cmd, stdin=subprocess.PIPE,
+                                     stdout=subprocess.PIPE,
+                                     stderr=subprocess.PIPE, shell=True)
+        log.debug("pipe.stdin: %d %s" % (self.pipe.stdin.fileno(),
+                                         str(self.pipe.stdin)))
+        log.debug("pipe.stdout: %d %s" % (self.pipe.stdout.fileno(),
+                                          str(self.pipe.stdout)))
+        self.fdin = self.pipe.stdout.fileno()
+        self.fdout = self.pipe.stdin.fileno()
+
     def run(self):
         try:
-            self.pipe = subprocess.Popen(self.cmd, stdin=subprocess.PIPE,
-                                         stdout=subprocess.PIPE,
-                                         stderr=subprocess.PIPE, shell=True)
 
             signal.signal(signal.SIGWINCH, self.sigWINCH)
-            log.debug("pipe.stdin: %d %s" % (self.pipe.stdin.fileno(),
-                                             str(self.pipe.stdin)))
-            log.debug("pipe.stdout: %d %s" % (self.pipe.stdout.fileno(),
-                                              str(self.pipe.stdout)))
-            self.mgr = TTYManager(self.pipe.stdout.fileno(),
-                                  self.pipe.stdin.fileno(),
-                                  self.tty, self.cmdCB)
+            log.debug("self.fdin: %s" % self.fdin.fileno())
+            log.debug("self.fdout: %s" % self.fdout.fileno())
+            self.mgr = TTYManager(self.fdin, self.fdout, self.tty, self.cmdCB)
             self.sigWINCH()
             self.mgr.run()
         except Exception, e:
