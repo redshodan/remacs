@@ -44,16 +44,16 @@ class TTYManager(object):
 
     def close(self):
         try:
-            os.close(self.fdin)
+            self.fdin.close()
         except:
             pass
         try:
-            os.close(self.fdout)
+            self.fdout.close()
         except:
             pass
         try:
             termios.tcsetattr(self.tty, termios.TCSANOW, self.orig_tty)
-            os.close(self.tty)
+            self.tty.close()
         except:
             pass
 
@@ -70,12 +70,18 @@ class TTYManager(object):
         new[1] = new[1] & ~termios.OPOST
         termios.tcsetattr(self.tty, termios.TCSANOW, new)
 
-        log.debug("fds: fdin=%d fdout=%d tty=%s" %
+        log.debug("fds: fdin=%s fdout=%s tty=%s" %
             (self.fdin, self.fdout, self.tty))
         
         fcntl.fcntl(self.tty, fcntl.F_SETFL, os.O_NONBLOCK)
-        fcntl.fcntl(self.fdin, fcntl.F_SETFL, os.O_NONBLOCK)
-        fcntl.fcntl(self.fdout, fcntl.F_SETFL, os.O_NONBLOCK)
+        if hasattr(self.fdin, "setblocking"):
+            self.fdin.setblocking(0)
+        else:
+            fcntl.fcntl(self.fdin, fcntl.F_SETFL, os.O_NONBLOCK)
+        if hasattr(self.fdout, "setblocking"):
+            self.fdout.setblocking(0)
+        else:
+            fcntl.fcntl(self.fdout, fcntl.F_SETFL, os.O_NONBLOCK)
         for fd in self.extra_fds:
             fcntl.fcntl(fd, fcntl.F_SETFL, os.O_NONBLOCK)
 

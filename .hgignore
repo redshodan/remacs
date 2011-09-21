@@ -5,3 +5,5 @@ android/gen
 android/local.properties
 build
 third_party/M2Crypto-0.21.1/
+.ropeproject/history
+.ropeproject/objectdb

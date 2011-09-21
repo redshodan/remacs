@@ -35,12 +35,11 @@ class Server(object):
         self.fdin = None
         self.fdout = None
         self.sock = None
-        self.pipe = None
         self.emacs_pid = None
 
     def setupInOut(self):
-        self.fdin = sys.stdin.fileno()
-        self.fdout = sys.stdout.fileno()
+        self.fdin = sys.stdin
+        self.fdout = sys.stdout
 
     def setupPipe(self):
         self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -48,11 +47,10 @@ class Server(object):
         log.info("connected to emacs server")
         self.sock.setblocking(0)
         log.debug("sock fd=%d" % self.sock.fileno())
-        self.pipe = self.sock.fileno()
-        log.debug("sock pipe fd: %d" % self.pipe)
 
     def setupTTY(self):
         (self.tty, self.slave) = pty.openpty()
+        self.tty = os.fdopen(self.tty, "r+", 0)
         fcntl.ioctl(self.tty, termios.TIOCSWINSZ,
                     struct.pack("HHHH", 24, 80, 0, 0))
         
@@ -62,7 +60,7 @@ class Server(object):
             self.setupPipe()
             self.setupTTY()
             self.mgr = TTYManager(self.fdin, self.fdout, self.tty, self.cmd_cb,
-                                  [self.pipe], self.pipe_cb)
+                                  [self.sock], self.sock_cb)
             self.mgr.run()
         except Exception, e:
             log.exception("Main loop exception", e)
@@ -75,7 +73,7 @@ class Server(object):
     def sendToEmacs(self, cmd):
         buff = cmd + "\000"
         log.verb("sendToEmacs:" + buff)
-        os.write(self.pipe, buff)
+        self.sock.write(buff)
 
     def receivedFromEmacs(self, buff):
         log.verb("Received from emacs: %s" % buff)
@@ -91,18 +89,18 @@ class Server(object):
             log.error("Invalid command from emacs")
         d.unlink()
 
-    def pipe_cb(self, fd):
-        log.debug("pipe_cb")
+    def sock_cb(self, fd):
+        log.debug("sock_cb")
         buff = None
         try:
-            buff = os.read(self.pipe, 4096)
-            log.debug("pipe_cb: read: %d: %s" % (len(buff), buff))
+            buff = self.sock.read(4096)
+            log.debug("sock_cb: read: %d: %s" % (len(buff), buff))
         except OSError, e:
             if e.errno == errno.EAGAIN:
-                log.debug("pipe_cb: EAGAIN")
+                log.debug("sock_cb: EAGAIN")
                 return
             else:
-                log.exception("pipe_cb: EXCEPT: %s" % e)
+                log.exception("sock_cb: EXCEPT: %s" % e)
                 raise
         if buff:
             for line in buff.split("\000"):

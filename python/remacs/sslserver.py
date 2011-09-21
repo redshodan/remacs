@@ -97,14 +97,17 @@ class SSLServerPort(ThreadingSSLServer):
         self._shutdown = True
         ThreadingSSLServer.shutdown(self)
 
-
-class SSLServer(object):
+class SSLServer(Server):
     def __init__(self, request, client_address, server):
+        super(SSLServer, self).__init__(server.options)
+        self.request = request
+        self.client_address= client_address
+        self.server = server
+        log.info("SSLServer: %s - %s - %s", request, client_address, server)
         log.info("Connection from: %s:%s" %
                  (client_address[0], client_address[1]))
-
-    # def __init__(self, options, ):
-    #     super(SSLServer, self).__init__(options)
+        self.run()
 
     def setupInOut(self):
-        pass
+        self.fdin = self.request
+        self.fdout = self.request

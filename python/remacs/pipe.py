@@ -22,6 +22,8 @@
 
 import os, errno
 
+from M2Crypto import m2
+from M2Crypto.SSL import SSLError
 from remacs import log
 from remacs.pipebuff import PipeBuff
 
@@ -58,15 +60,19 @@ class Pipe(object):
             data = None
             try:
                 log.debug("starting read(%s)" % str(self.ifd))
-                data = os.read(self.ifd, 1024)
+                data = self.ifd.read(1024)
                 if data and len(data):
                     if self.buff.data:
                         self.buff.data = self.buff.data + data
                     else:
                         self.buff.data = data
-                log.debug("read(%s): %s %s" % (str(self.ifd), len(data), data))
+                if data:
+                    log.debug("read(%s): %s %s" % (str(self.ifd), len(data),
+                                                   data))
+                else:
+                    log.debug("read(%s): %s" % (str(self.ifd), data))
             except OSError, e:
-                # log.debug("read(%s): EXC: %s" % (str(self.ifd), str(e)))
+                log.debug("read(%s): EXC: %s" % (str(self.ifd), str(e)))
                 if e.errno == errno.EIO:
                     log.debug("read(%s): EXC: %s" % (str(self.ifd), "EIO"))
                     delList(self.ifd, self.ins)
@@ -79,14 +85,25 @@ class Pipe(object):
                     log.debug("read(%s): EXC: %s:%d" %
                         (str(self.ifd), e.errno))
                     raise
-            if ((not data) or (not len(data))):
+            except SSLError, e:
+                if e.args[0] == m2.ssl_error_want_read:
+                    log.debug("ssl_read(%s): want_read" % str(self.ifd))
+                    self.insList(self.ifd, self.ins)
+                elif e.args[0] == m2.ssl_error_want_write:
+                    log.debug("ssl_read(%s): want_write" % str(self.ifd))
+                    self.insList(self.ofd, self.outs)
+                elif e.args[0] != m2.ssl_error_none:
+                    log.debug("ssl_read(%s): want_none" % str(self.ifd))
+                    raise PipeConnLost("Connection lost")
+                return False
+            if (not data or not len(data)):
                 raise PipeConnLost("Connection lost")
         if self.buff.data:
             self.buff.filterData()
         if self.buff.output:
             try:
                 log.debug("write(%s) %s" % (str(self.ofd), self.buff.output))
-                size = os.write(self.ofd, self.buff.output)
+                size = self.ofd.write(self.buff.output)
                 log.debug("write(%s) size %s" % (str(self.ofd), str(size)))
             except OSError, e:
                 log.debug("write(%s): EXC %s" % (str(self.ofd), str(e)))
@@ -95,7 +112,21 @@ class Pipe(object):
                     self.insList(self.ofd, self.outs)
                     self.delList(self.ifd, self.ins)
                     return False
-            if size is None:
+            except SSLError, e:
+                if e.args[0] == m2.ssl_error_want_read:
+                    log.debug("ssl_write(%s): want_read" % str(self.ofd))
+                    self.insList(self.ifd, self.ins)
+                elif e.args[0] == m2.ssl_error_want_write:
+                    log.debug("ssl_write(%s): want_write" % str(self.ofd))
+                    self.insList(self.ofd, self.outs)
+                elif e.args[0] != m2.ssl_error_none:
+                    raise PipeConnLost("Connection lost")
+                else:
+                    log.debug("ssl_write(%s): want_none" % str(self.ofd))
+                    self.insList(self.ifd, self.ins)
+                    self.delList(self.ofd, self.outs)                    
+                return False
+            if (size is None or size <= 0):
                 raise PipeConnLost("Connection lost on write")
             elif size > 0:
                 if size != len(self.buff.output):
