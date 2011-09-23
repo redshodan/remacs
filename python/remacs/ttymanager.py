@@ -76,12 +76,10 @@ class TTYManager(object):
         fcntl.fcntl(self.tty, fcntl.F_SETFL, os.O_NONBLOCK)
         if hasattr(self.fdin, "setblocking"):
             self.fdin.setblocking(0)
-        else:
-            fcntl.fcntl(self.fdin, fcntl.F_SETFL, os.O_NONBLOCK)
+        fcntl.fcntl(self.fdin, fcntl.F_SETFL, os.O_NONBLOCK)
         if hasattr(self.fdout, "setblocking"):
             self.fdout.setblocking(0)
-        else:
-            fcntl.fcntl(self.fdout, fcntl.F_SETFL, os.O_NONBLOCK)
+        fcntl.fcntl(self.fdout, fcntl.F_SETFL, os.O_NONBLOCK)
         for fd in self.extra_fds:
             fcntl.fcntl(fd, fcntl.F_SETFL, os.O_NONBLOCK)
 

@@ -28,13 +28,16 @@ from M2Crypto.SSL import SSLError
 
 from remacs import log
 from remacs.server import Server
+from remacs import sslutil
 
 
 class SSLServerPort(ThreadingSSLServer):
     def __init__(self, options):
         self.options = options
         self.ctx = sslutil.create_ctx(options)
-        ThreadingSSLServer.__init__(self, ("0.0.0.0", int(self.options.sslport)),
+        ThreadingSSLServer.__init__(self,
+                                    (self.options.host,
+                                     int(self.options.sslport)),
                                     SSLServer, self.ctx)
         self._shutdown = False
 

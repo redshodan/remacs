@@ -49,7 +49,7 @@ class Client(object):
             self.initX()
         if self.tty is None:
             log.info("No VTE setup, continuing on stdin")
-            self.tty = os.open(os.ttyname(sys.stdin.fileno()), os.O_RDWR)
+            self.tty = open(os.ttyname(sys.stdin.fileno()), "r+", 0)
 
     def initX(self):
         try:
@@ -59,6 +59,7 @@ class Client(object):
             self.tray = systray.SysTray(self)
             log.info("Setup systray")
             self.tty = self.tray.startVTE()
+            self.tty = os.fdopen(self.tty, "r+", 0)
             log.info("Setup VTE, tty: %s" % self.tty)
             self.tray.start()
             log.info("Setup X")
@@ -66,19 +67,19 @@ class Client(object):
             log.exception("Failed to setup X interface: " + str(e))
 
     def setupInOut(self):
-        self.pipe = subprocess.Popen(self.cmd, stdin=subprocess.PIPE,
+        self.pipe = subprocess.Popen(self.cmd, bufsize=0, stdin=subprocess.PIPE,
                                      stdout=subprocess.PIPE,
                                      stderr=subprocess.PIPE, shell=True)
         log.debug("pipe.stdin: %d %s" % (self.pipe.stdin.fileno(),
                                          str(self.pipe.stdin)))
         log.debug("pipe.stdout: %d %s" % (self.pipe.stdout.fileno(),
                                           str(self.pipe.stdout)))
-        self.fdin = self.pipe.stdout.fileno()
-        self.fdout = self.pipe.stdin.fileno()
+        self.fdin = self.pipe.stdout
+        self.fdout = self.pipe.stdin
 
     def run(self):
         try:
-
+            self.setupInOut()
             signal.signal(signal.SIGWINCH, self.sigWINCH)
             log.debug("self.fdin: %s" % self.fdin.fileno())
             log.debug("self.fdout: %s" % self.fdout.fileno())

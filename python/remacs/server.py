@@ -41,7 +41,7 @@ class Server(object):
         self.fdin = sys.stdin
         self.fdout = sys.stdout
 
-    def setupPipe(self):
+    def setupSock(self):
         self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self.sock.connect("/tmp/remacs%d/remacs" % os.geteuid())
         log.info("connected to emacs server")
@@ -57,7 +57,7 @@ class Server(object):
     def run(self):
         try:
             self.setupInOut()
-            self.setupPipe()
+            self.setupSock()
             self.setupTTY()
             self.mgr = TTYManager(self.fdin, self.fdout, self.tty, self.cmd_cb,
                                   [self.sock], self.sock_cb)
@@ -73,7 +73,7 @@ class Server(object):
     def sendToEmacs(self, cmd):
         buff = cmd + "\000"
         log.verb("sendToEmacs:" + buff)
-        self.sock.write(buff)
+        self.sock.send(buff)
 
     def receivedFromEmacs(self, buff):
         log.verb("Received from emacs: %s" % buff)
@@ -93,7 +93,7 @@ class Server(object):
         log.debug("sock_cb")
         buff = None
         try:
-            buff = self.sock.read(4096)
+            buff = self.sock.recv(4096)
             log.debug("sock_cb: read: %d: %s" % (len(buff), buff))
         except OSError, e:
             if e.errno == errno.EAGAIN:

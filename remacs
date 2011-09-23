@@ -42,6 +42,7 @@ from remacs import log
 from remacs.server import Server
 from remacs.sslserver import SSLServerPort
 from remacs.client import Client
+from remacs.sslclient import SSLClient
 
 
 remacs.init(path)
@@ -52,10 +53,12 @@ if __name__ == "__main__":
     parser = OptionParser(usage="Usage: %prog [options] <hostname>")
     parser.add_option("-s", "--server", action="store_true", dest="server",
                       default=False, help="Run in server mode")
-    parser.add_option("-S", "--sslserver", action="store_true", dest="sslserver",
-                      default=False, help="Run in sslserver mode")
+    parser.add_option("-S", "--ssl", action="store_true", dest="ssl",
+                      default=False, help="Run in ssl mode")
+    parser.add_option("-H", "--host", dest="host", default="0.0.0.0",
+                      help="Listen address for sslserver mode")
     parser.add_option("-P", "--sslport", dest="sslport",
-                      default="4747", help="Sets sslserver port")
+                      default="4747", help="Sets ssl port")
     parser.add_option("-c", "--cert", dest="cert", default=None,
                       help="Cert for ssl mode")
     parser.add_option("-C", "--cacert", dest="cacert", default=None,
@@ -69,18 +72,27 @@ if __name__ == "__main__":
                       help="Set the id for this client")
     (options, args) = parser.parse_args()
 
+    if (options.ssl and (not options.cert or not options.cacert)):
+        print "SSL mode requires both cert (-c) and cacert (-C) to be set."
+        parser.print_help()
+        sys.exit(1)
+
     if options.server:
-        log.init("server")
-        server = Server(options)
-        server.run()
-    elif options.sslserver:
-        log.init("sslserver")
-        server = SSLServerPort(options)
+        if options.ssl:
+            log.init("sslserver")
+            server = SSLServerPort(options)
+        else:
+            log.init("server")
+            server = Server(options)
         server.run()
     elif len(args) != 1:
         parser.print_help()
     else:
-        log.init("client")
         options.host = args[0]
-        client = Client(options)
+        if options.ssl:
+            log.init("sslclient")
+            client = SSLClient(options)
+        else:
+            log.init("client")
+            client = Client(options)
         client.run()
