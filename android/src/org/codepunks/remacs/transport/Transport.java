@@ -25,13 +25,14 @@ public abstract class Transport implements Runnable
     //  - middle 4 bits are size of data.
     //  - most significant bit indicates size is number of size bytes.
     public static final long CMD_NONE = -1;
-    public static final long CMD_TTY = 0;
-    public static final long CMD_CMD = 1;
-    public static final long CMD_BLOCK = 2;
-    public static final long CMD_MAX = 7;
-    public static final long CMD_CMDS = 7;
-    public static final long CMD_SIZE_MAX = 15;
-    public static final long CMD_SIZE_MAXED = 128;
+    public static final long CMD_ACK = 0;
+    public static final long CMD_TTY = 1;
+    public static final long CMD_CMD = 2;
+    public static final long CMD_BLOCK = 3;
+    public static final long CMD_MAX = 3;
+    public static final long CMD_BITS = 2;
+    public static final long CMD_SIZE_MAX = 62;
+    public static final long CMD_SIZE_MAXED = 252;
 
     protected Connection mConn;
     protected Thread mThread;
@@ -91,7 +92,7 @@ public abstract class Transport implements Runnable
                 long offset;
                 if (length <= CMD_SIZE_MAX)
                 {
-                    cmd = cmd + (length << 3);
+                    cmd = cmd + (length << CMD_BITS);
                     offset = 1;
                 }
                 else
@@ -166,7 +167,7 @@ public abstract class Transport implements Runnable
                         }
                         if (mCmdLength == 0)
                         {
-                            if ((mCmd & CMD_SIZE_MAXED) != 0)
+                            if ((mCmd & CMD_SIZE_MAXED) == CMD_SIZE_MAXED)
                             {
                                 // Log.d(TAG, "size maxed, getting next 4 bytes");
                                 try
@@ -180,9 +181,9 @@ public abstract class Transport implements Runnable
                             }
                             else
                             {
-                                mCmdLength = mCmd >> 3;
+                                mCmdLength = mCmd >> CMD_BITS;
                             }
-                            mCmd = mCmd & CMD_CMDS;
+                            mCmd = mCmd & CMD_MAX;
                             // Log.d(TAG,
                             //       String.format("Decoded mCmd=%d mCmdLength=%d",
                             //                     mCmd, mCmdLength));

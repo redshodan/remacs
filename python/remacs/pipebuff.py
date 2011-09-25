@@ -28,17 +28,19 @@ from remacs import log
 
 class PipeBuff(object):
     # Command byte:
-    #  - least significant 3 bits are command.
-    #  - middle 4 bits are size of data.
-    #  - most significant bit indicates size is number of size bytes.
+    #  - least significant 2 bits are command.
+    #  - most significant 6 bits are size of data.
+    #  - all most significant 6 bits set is size overflow, followed by 4 bytes
+    #    of size
     CMD_NONE = -1
-    CMD_TTY = 0
-    CMD_CMD = 1
-    CMD_BLOCK = 2
-    CMD_MAX = 7
-    CMD_CMDS = 7
-    CMD_SIZE_MAX = 15
-    CMD_SIZE_MAXED = 128
+    CMD_ACK = 0
+    CMD_TTY = 1
+    CMD_CMD = 2
+    CMD_BLOCK = 3
+    CMD_MAX = 3
+    CMD_BITS = 2
+    CMD_SIZE_MAX = 62
+    CMD_SIZE_MAXED = 252
 
     def __init__(self, cb, decoder, encoder):
         self.cb = cb
@@ -83,7 +85,7 @@ class PipeBuff(object):
             length = len(data)
             log.debug("length=%d" % length)
             if length <= self.CMD_SIZE_MAX:
-                cmd = cmd + (length << 3)
+                cmd = cmd + (length << self.CMD_BITS)
                 log.debug("cmd: %d" % cmd)
                 output = struct.pack("B", cmd) + data
             else:
@@ -107,7 +109,8 @@ class PipeBuff(object):
             log.debug("unpacked cmd: %d" % self.cmd)
             log.debug("data len: %d" % len(self.data))
         if self.length == -1:
-            if self.cmd & self.CMD_SIZE_MAXED:
+            if self.cmd & self.CMD_SIZE_MAXED == self.CMD_SIZE_MAXED:
+                log.debug("MAXED")
                 if len(self.data) < 4:
                     log.debug("dont have enough for length")
                     return False
@@ -115,8 +118,8 @@ class PipeBuff(object):
                 self.length = socket.ntohl(self.length)
                 self.data = self.data[4:]
             else:
-                self.length = self.cmd >> 3
-            self.cmd = self.cmd & self.CMD_CMDS
+                self.length = self.cmd >> self.CMD_BITS
+            self.cmd = self.cmd & self.CMD_MAX
             log.debug("setting cmd to: %d" % self.cmd)
         cmd = self.cmd
         ret = False
