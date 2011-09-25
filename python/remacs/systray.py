@@ -75,10 +75,10 @@ class SysTray(threading.Thread):
             self.menu.popup(None, None, None, self.menu_ev_btn,
                             self.menu_ev_time, None)
         else:
-            if self.ttywin.is_active():
-                self.ttywin.iconify()
-            else:
+            if self.ttywin.isIconified():
                 self.raiseWindow()
+            else:
+                self.ttywin.iconify()
         self.checkPending()
 
     def onMiddleClick(self, widget, event):
@@ -90,7 +90,7 @@ class SysTray(threading.Thread):
                 pending = child
                 break
         if pending:
-            if not self.ttywin.is_active():
+            if self.ttywin.isIconified():
                 self.raiseWindow()
             if child.remacs_id:
                 if event.get_state() & gtk.gdk.SHIFT_MASK:
@@ -115,7 +115,7 @@ class SysTray(threading.Thread):
         widget.set_sensitive(False)
         if widget.remacs_id:
             self.client.invokeNotif(widget.remacs_id)
-            if not self.ttywin.is_active():
+            if self.ttywin.isIconified():
                 self.raiseWindow()
         self.checkPending()
 

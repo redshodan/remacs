@@ -33,6 +33,7 @@ class TTYWindow(gtk.Window):
         self.systray = systray
         self.set_title("remacs")
         self.connect('destroy', self.onQuit)
+        self.connect('window-state-event', self.onWinStateEv)
         self.tty = vte.Terminal()
         self.tty.set_cursor_blinks(True)
         self.tty.set_emulation("xterm")
@@ -46,3 +47,10 @@ class TTYWindow(gtk.Window):
     
     def onQuit(self, obj):
         self.systray.onQuit(None)
+
+    def onWinStateEv(self, widget, event):
+        self.winState = event.new_window_state
+
+    def isIconified(self):
+        return ((self.winState & gtk.gdk.WINDOW_STATE_ICONIFIED) and
+                not (self.winState & gtk.gdk.WINDOW_STATE_WITHDRAWN))
