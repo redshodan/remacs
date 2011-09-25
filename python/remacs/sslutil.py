@@ -30,6 +30,8 @@ from remacs import log
 
 
 class SSLUtil(object):
+    LOG = "SSL connection:"
+
     def __init__(self, isserver, cacert, cert):
         self.loadContext(isserver, cacert, cert)
         self.loadAllCerts(cacert)
@@ -49,16 +51,16 @@ class SSLUtil(object):
         self.ctx.set_info_callback(self.sslInfoCallback)
     
     def postConnectionCheck(self, peer_cert, peer_addr):
-        log.info("SSL connection: checking: %s, %s",
-                 peer_addr, peer_cert.get_subject())
+        log.info("%s checking: %s, %s",
+                 self.LOG, peer_addr, peer_cert.get_subject())
         # Must have a cert
         if peer_cert is None:
-            raise Exception("SSL connection: Peer did not return certificate")
+            raise Exception("%s Peer did not return certificate" % self.LOG)
         # Check openssl's verification
         ret = self.sock.get_verify_result()
         if ret != m2.X509_V_OK:
-            msg = ("SSL connection: Peers certificate did not verify: %s - %s" %
-                   (Err.get_error(), Err.get_error_reason(ret)))
+            msg = ("% Peers certificate did not verify: %s - %s" %
+                   (self.LOG, Err.get_error(), Err.get_error_reason(ret)))
             log.warn(msg)
             raise Exception(msg)
         # Compare the peers cacert to our cacerts, just to make sure
@@ -66,7 +68,7 @@ class SSLUtil(object):
         if not stack:
             # FIXME: do extra verification in sslserver case where there was no
             # cacert given
-            log.info("SSL Connection: peer issued by: ")
+            log.info("%s peer issued by: FIXME!" % (self.LOG))
                      # str(peer_cert.get_issuer()))
             return True
         for ca in self.cacerts:
@@ -75,10 +77,9 @@ class SSLUtil(object):
             for peer in stack:
                 if ((cakey == peer.get_pubkey().get_rsa().pub()) and
                     (der == peer.as_der())):
-                    log.info("SSL connection: peer signed by: %s",
-                             ca.get_subject())
+                    log.info("%s peer signed by: %s", self.LOG, ca.get_subject())
                     return True
-        raise Exception("SSL connection: No trusted CA Cert found")
+        raise Exception("%s No trusted CA Cert found" % self.LOG)
     
     # Borrowed from M2Crypto.X509 and modified
     def loadAllCerts(self, file, format=X509.FORMAT_PEM):
@@ -117,16 +118,19 @@ class SSLUtil(object):
         #     log.verb("LOOP: %s: %s" % (state, m2.ssl_get_state_v(ssl_ptr)))
         if (where & m2.SSL_CB_EXIT):
             if not ret:
-                log.warn("FAILED: %s: %s" % (state, m2.ssl_get_state_v(ssl_ptr)))
+                log.warn("%s FAILED: %s: %s" %
+                         (self.LOG, state, m2.ssl_get_state_v(ssl_ptr)))
             else:
-                log.verb("%s: %s" % (state, m2.ssl_get_state_v(ssl_ptr)))
+                log.verb("%s %s: %s" %
+                         (self.LOG, state, m2.ssl_get_state_v(ssl_ptr)))
         elif (where & m2.SSL_CB_ALERT):
             if (where & m2.SSL_CB_READ):
                 w = 'read'
             else:
                 w = 'write'
             desc = m2.ssl_get_alert_desc_v(ret)
-            msg = "ALERT: %s: %s: %s" % (w, m2.ssl_get_alert_type_v(ret), desc)
+            msg = ("%s ALERT: %s: %s: %s" %
+                   (self.LOG, w, m2.ssl_get_alert_type_v(ret), desc))
             if desc == "close notify":
                 log.verb(msg)
             else:
