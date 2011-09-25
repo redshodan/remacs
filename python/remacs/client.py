@@ -34,6 +34,8 @@ class Client(object):
         self.options = options
         self.fdin = None
         self.fdout = None
+        self.mgr = None
+        self.tray = None
         self.emacs_suspended = False
         self.cmd = (self.options.transport + " -T " + self.options.host +
                     " remacs --server")
@@ -91,7 +93,10 @@ class Client(object):
             import traceback
             traceback.print_exc()
         finally:
-            self.mgr.close()
+            if self.mgr:
+                self.mgr.close()
+            if self.tray:
+                self.tray.stop()
 
     def quit(self):
         log.info("Client.quit")

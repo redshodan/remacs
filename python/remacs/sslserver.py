@@ -34,11 +34,13 @@ from remacs import sslutil
 class SSLServerPort(ThreadingSSLServer):
     def __init__(self, options):
         self.options = options
-        self.ctx = sslutil.create_ctx(options)
+        self.util = sslutil.SSLUtil(True, options.cacert, options.cert)
         ThreadingSSLServer.__init__(self,
                                     (self.options.host,
                                      int(self.options.sslport)),
-                                    SSLServer, self.ctx)
+                                    SSLServer, self.util.ctx)
+        self.socket.postConnectionCheck = self.util.postConnectionCheck
+        self.util.sock = self.socket
         self._shutdown = False
 
     def handle_error(self, request, client_address):
@@ -66,9 +68,8 @@ class SSLServer(Server):
         self.request = request
         self.client_address= client_address
         self.server = server
-        log.info("SSLServer: %s - %s - %s", request, client_address, server)
-        log.info("Connection from: %s:%s" %
-                 (client_address[0], client_address[1]))
+        log.info("Connection from: %s:%s", str(client_address[0]),
+                 str(client_address[1]))
         self.run()
 
     def setupInOut(self):

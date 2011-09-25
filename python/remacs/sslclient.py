@@ -23,8 +23,6 @@
 
 import sys, socket
 
-from M2Crypto.SSL.SSLServer import ThreadingSSLServer
-from M2Crypto.SSL import SSLError, Connection
 
 from remacs import log
 from remacs.client import Client
@@ -34,10 +32,10 @@ from remacs import sslutil
 class SSLClient(Client):
     def __init__(self, options):
         super(SSLClient, self).__init__(options)
-        self.ctx = sslutil.create_ctx(options)
+        self.util = sslutil.SSLUtil(False, options.cacert, options.cert)
 
     def setupInOut(self):
-        self.sock = Connection(self.ctx)
-        self.sock.connect((self.options.host, int(self.options.sslport)))
-        self.fdin = self.sock
-        self.fdout = self.sock
+        self.util.makeSock()
+        self.util.sock.connect((self.options.host, int(self.options.sslport)))
+        self.fdin = self.util.sock
+        self.fdout = self.util.sock

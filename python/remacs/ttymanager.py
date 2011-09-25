@@ -27,7 +27,7 @@ from remacs.pipe import Pipe, PipeConnLost
 
 
 class TTYManager(object):
-    def __init__(self, fdin, fdout, tty, cmd_cb, extra_fds=[],
+    def __init__(self, fdin, fdout, tty, cmd_cb, extra_fds=None,
                  extra_fds_cb=None):
         self.running = True
         self.fdin = fdin
@@ -36,7 +36,10 @@ class TTYManager(object):
         self.ins = []
         self.outs = []
         self.cmd_cb = cmd_cb
-        self.extra_fds = extra_fds
+        if extra_fds:
+            self.extra_fds = extra_fds
+        else:
+            self.extra_fds = []
         self.extra_fds_cb = extra_fds_cb
         self.inpipe = Pipe(self.ins, self.outs, self.cmd_cb, True, False)
         self.outpipe = Pipe(self.ins, self.outs, self.cmd_cb, False, True)
@@ -56,6 +59,11 @@ class TTYManager(object):
             self.tty.close()
         except:
             pass
+        for extra in self.extra_fds:
+            try:
+                extra.close()
+            except:
+                pass
 
     def setup(self):
         self.orig_tty = termios.tcgetattr(self.tty)
@@ -117,7 +125,7 @@ class TTYManager(object):
                     if self.fdout in ret[1]:
                         self.outpipe.run(False)
                 except PipeConnLost, e:
-                    log.exception("Connection Lost: %s" % str(e))
+                    log.info("Connection lost")
                     self.close()
                     return
                 except Exception, e:

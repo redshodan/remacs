@@ -22,7 +22,7 @@
 
 
 import sys, os, threading, pty
-import gtk
+import gtk, glib
 
 import remacs
 from remacs import log, xidler
@@ -32,6 +32,12 @@ class SysTray(threading.Thread):
     def __init__(self, client):
         threading.Thread.__init__(self)
         self.client = client
+
+    def stop(self):
+        def doquit():
+            for a in range(gtk.main_level() + 1):
+                gtk.main_quit()
+        glib.idle_add(doquit)
 
     def run(self):
         self.icon_file = os.path.join(remacs.home, "share/emacs23.svg")
