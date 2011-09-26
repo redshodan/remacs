@@ -24,6 +24,7 @@ import os, select, termios, fcntl
 
 from remacs import log
 from remacs.pipe import Pipe, PipeConnLost
+from remacs.acker import InAcker, OutAcker
 
 
 class TTYManager(object):
@@ -41,8 +42,13 @@ class TTYManager(object):
         else:
             self.extra_fds = []
         self.extra_fds_cb = extra_fds_cb
-        self.inpipe = Pipe(self.ins, self.outs, self.cmd_cb, True, False)
-        self.outpipe = Pipe(self.ins, self.outs, self.cmd_cb, False, True)
+        self.inacker = InAcker()
+        self.outacker = OutAcker()
+        self.inpipe = Pipe(self.ins, self.outs, self.cmd_cb, True, False,
+                           self.inacker, self.outacker)
+        self.outpipe = Pipe(self.ins, self.outs, self.cmd_cb, False, True,
+                            self.inacker, self.outacker)
+        self.inacker.pbuff = self.outpipe.buff
         self.setup()
 
     def close(self):

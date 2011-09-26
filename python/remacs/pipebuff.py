@@ -42,7 +42,7 @@ class PipeBuff(object):
     CMD_SIZE_MAX = 62
     CMD_SIZE_MAXED = 252
 
-    def __init__(self, cb, decoder, encoder):
+    def __init__(self, cb, decoder, encoder, inacker, outacker):
         self.cb = cb
         self.decoder = decoder
         self.encoder = encoder
@@ -50,6 +50,8 @@ class PipeBuff(object):
         self.output = None
         self.length = -1
         self.cmd = self.CMD_NONE
+        self.inacker = inacker
+        self.outacker = outacker
 
     def toStr(self):
         if self.data:
@@ -82,20 +84,30 @@ class PipeBuff(object):
         else:
             log.verb("encodeCmd:%d %s" % (cmd, data))
         if data:
-            length = len(data)
-            log.debug("length=%d" % length)
-            if length <= self.CMD_SIZE_MAX:
-                cmd = cmd + (length << self.CMD_BITS)
-                log.debug("cmd: %d" % cmd)
-                output = struct.pack("B", cmd) + data
-            else:
+            if cmd == self.CMD_ACK:
                 cmd = cmd + self.CMD_SIZE_MAXED
-                log.debug("e-nnl: %d" % length)
-                log.debug("e-nl: %d" % socket.htonl(length))
+                log.debug("cmd: %d" % cmd)
+                log.debug("e-nnl: %d" % data)
+                log.debug("e-nl: %d" % socket.htonl(data))
                 output = (struct.pack("B", cmd) +
-                          struct.pack("I", socket.htonl(length)) + str(data))
+                          struct.pack("I", socket.htonl(data)))
+            else:
+                length = len(data)
+                log.debug("length=%d" % length)
+                if length <= self.CMD_SIZE_MAX:
+                    cmd = cmd + (length << self.CMD_BITS)
+                    log.debug("cmd: %d" % cmd)
+                    output = struct.pack("B", cmd) + data
+                else:
+                    cmd = cmd + self.CMD_SIZE_MAXED
+                    log.debug("e-nnl: %d" % length)
+                    log.debug("e-nl: %d" % socket.htonl(length))
+                    output = (struct.pack("B", cmd) +
+                              struct.pack("I", socket.htonl(length)) + str(data))
         else:
             output = struct.pack("B", cmd)
+        if cmd != self.CMD_ACK:
+            self.outacker.outPacket(output)
         if self.output:
             self.output = self.output + output
         else:
@@ -124,7 +136,15 @@ class PipeBuff(object):
         cmd = self.cmd
         ret = False
         cmd_data = None
-        if len(self.data) == self.length:
+        if cmd == self.CMD_ACK:
+            log.debug("ACK: got ack %d", self.length)
+            acked = self.length
+            self.length = -1
+            self.cmd = self.CMD_NONE
+            if len(self.data) > 0:
+                ret = True
+            self.outacker.handleAck(acked)
+        elif len(self.data) == self.length:
             log.debug("data and length same size")
             cmd_data = self.data
             self.data = None
@@ -138,6 +158,8 @@ class PipeBuff(object):
             self.cmd = self.CMD_NONE
             self.length = -1
             ret = True
+        if cmd != self.CMD_ACK:
+            self.inacker.inPacket()
         if (cmd_data and (cmd != self.CMD_TTY)):
             cmd_data = self.cb(cmd, cmd_data)
         if cmd_data:

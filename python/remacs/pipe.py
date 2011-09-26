@@ -33,12 +33,12 @@ class PipeConnLost(Exception):
 
 
 class Pipe(object):
-    def __init__(self, ins, outs, cb, decoder, encoder):
+    def __init__(self, ins, outs, cb, decoder, encoder, inacker, outacker):
         self.ifd = None
         self.ofd = None
         self.ins = ins
         self.outs = outs
-        self.buff = PipeBuff(cb, decoder, encoder)
+        self.buff = PipeBuff(cb, decoder, encoder, inacker, outacker)
         self.reader = None
 
     def setPipes(self, ifd, ofd):
