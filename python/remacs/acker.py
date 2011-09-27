@@ -22,11 +22,12 @@
 
 
 from remacs import log
+from remacs.pipebuff import PipeBuff
 
 
 class InAcker(object):
     def __init__(self):
-        self.pbuff = None
+        self.outpipe = None
         self.ack_window = 5
         self.ack_cur = 0
         self.pkt_count = 0
@@ -35,7 +36,7 @@ class InAcker(object):
         self.pkt_count = self.pkt_count + 1
         if self.pkt_count - self.ack_cur >= self.ack_window:
             log.debug("ACK: Sending ack for %d", self.pkt_count)
-            self.pbuff.encodeCmd(self.pbuff.CMD_ACK, self.pkt_count)
+            self.outpipe.sendCmd(PipeBuff.CMD_ACK, self.pkt_count)
             self.ack_cur = self.pkt_count
 
 
@@ -57,8 +58,15 @@ class OutAcker(object):
         if self.ack_cur >= acked:
             log.debug("ACK: mismatch: ack_cur=%d acked=%d", self.ack_cur, acked)
             return
-        delta = acked - self.ack_cur
-        for index in range(delta):
-            del self.buffer[index]
+        log.debug("ACK: ack_cur=%d acked=%d", self.ack_cur, acked)
+        for pkt in self.buffer:
+            log.debug("ACK: pkt: %d", pkt[0])
+        for index in range(len(self.buffer)):
+            if self.buffer[index][0] > acked:
+                log.debug("ACK: break on %d", index)
+                break
+        self.buffer = self.buffer[index:]
+        for pkt in self.buffer:
+            log.debug("ACK: pkt: %d", pkt[0])
         self.ack_cur = acked
-        log.debug("ACK: buffer has %d packets", delta)
+        log.debug("ACK: buffer has %d packets", len(self.buffer))

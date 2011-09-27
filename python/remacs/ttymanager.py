@@ -48,7 +48,7 @@ class TTYManager(object):
                            self.inacker, self.outacker)
         self.outpipe = Pipe(self.ins, self.outs, self.cmd_cb, False, True,
                             self.inacker, self.outacker)
-        self.inacker.pbuff = self.outpipe.buff
+        self.inacker.outpipe = self.outpipe
         self.setup()
 
     def close(self):
