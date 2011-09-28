@@ -20,6 +20,7 @@
 #
 
 import os, logging
+from logging import DEBUG, INFO, WARNING, CRITICAL
 from logging.handlers import RotatingFileHandler
 
 VERBOSE = 15
@@ -54,16 +55,22 @@ def exception(*args, **kwargs):
         args[0] = args[0] + "\n" + str(e)
     logger.exception(*args, **kwargs)
 
+def setLevel(level):
+    logger.setLevel(level)
+
+def getLevel():
+    return logger.getEffectiveLevel()
+
 def init(name):
     global logger, handler, ui, uifile
 
     logging.addLevelName(VERBOSE, "VERB")
-    logging.addLevelName(logging.WARNING, "WARN")
-    logging.addLevelName(logging.CRITICAL, "CRIT")
+    logging.addLevelName(WARNING, "WARN")
+    logging.addLevelName(CRITICAL, "CRIT")
 
     # Main logger
     logger = logging.getLogger(name)
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(DEBUG)
     handler = RotatingFileHandler(name + ".log")
     formatter = logging.Formatter(FORMAT)
     handler.setFormatter(formatter)

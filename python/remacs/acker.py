@@ -38,6 +38,7 @@ class InAcker(object):
             log.debug("ACK: Sending ack for %d", self.pkt_count)
             self.outpipe.sendCmd(PipeBuff.CMD_ACK, self.pkt_count)
             self.ack_cur = self.pkt_count
+        log.debug("ACK: inPacket: %d", self.pkt_count)
 
 
 class OutAcker(object):
@@ -52,6 +53,7 @@ class OutAcker(object):
         if self.pkt_count - self.ack_cur >= self.ack_window:
             log.debug("ACK: %d unacked packets", self.pkt_count - self.ack_cur)
         self.buffer.append((self.pkt_count, pkt))
+        log.debug("ACK: outPacket: %d", self.pkt_count)
 
     def handleAck(self, acked):
         log.debug("ACK: Handling %d", acked)
@@ -60,13 +62,13 @@ class OutAcker(object):
             return
         log.debug("ACK: ack_cur=%d acked=%d", self.ack_cur, acked)
         for pkt in self.buffer:
-            log.debug("ACK: pkt: %d", pkt[0])
+            log.debug("ACK: before pkt: %d", pkt[0])
         for index in range(len(self.buffer)):
             if self.buffer[index][0] > acked:
                 log.debug("ACK: break on %d", index)
                 break
-        self.buffer = self.buffer[index:]
+        self.buffer = self.buffer[index + 1:]
         for pkt in self.buffer:
-            log.debug("ACK: pkt: %d", pkt[0])
+            log.debug("ACK: after pkt: %d", pkt[0])
         self.ack_cur = acked
         log.debug("ACK: buffer has %d packets", len(self.buffer))

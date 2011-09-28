@@ -79,12 +79,14 @@ class PipeBuff(object):
                 log.debug("output buff: %s" % self.output)
 
     def encodeCmd(self, cmd, data):
+        isack = False
         if cmd == self.CMD_TTY:
             log.debug("encodeCmd:%d %s" % (cmd, data))
         else:
             log.verb("encodeCmd:%d %s" % (cmd, data))
         if data:
             if cmd == self.CMD_ACK:
+                isack = True
                 cmd = cmd + self.CMD_SIZE_MAXED
                 log.debug("cmd: %d" % cmd)
                 log.debug("e-nnl: %d" % data)
@@ -106,7 +108,7 @@ class PipeBuff(object):
                               struct.pack("I", socket.htonl(length)) + str(data))
         else:
             output = struct.pack("B", cmd)
-        if cmd != self.CMD_ACK:
+        if not isack:
             self.outacker.outPacket(output)
         if self.output:
             self.output = self.output + output
@@ -167,19 +169,20 @@ class PipeBuff(object):
                 self.output = self.output + cmd_data
             else:
                 self.output = cmd_data
-        log.debug("decoded length: %d self.cmd: %d cmd: %d" %
-            (self.length, self.cmd, cmd))
-        log.debug("decoded data: %s" % self.data)
-        if self.data:
-            log.debug("decoded data len: %d" % len(self.data))
-        log.debug("decoded output: %s" % self.output)
-        if self.output:
-            log.debug("output len: %d" % len(self.output))
-        log.debug("decoded cmd_data: %s" % cmd_data)
-        if cmd_data:
-            log.debug("cmd_data len: %d" % len(cmd_data))
-            if cmd != self.CMD_TTY:
-                log.verb("decoded data: %s" % cmd_data)
+        if log.getLevel() == log.DEBUG:
+            log.debug("decoded length: %d self.cmd: %d cmd: %d" %
+                      (self.length, self.cmd, cmd))
+            log.debug("decoded data: %s" % self.data)
+            if self.data:
+                log.debug("decoded data len: %d" % len(self.data))
+            log.debug("decoded output: %s" % self.output)
+            if self.output:
+                log.debug("output len: %d" % len(self.output))
+            log.debug("decoded cmd_data: %s" % cmd_data)
+            if cmd_data:
+                log.debug("cmd_data len: %d" % len(cmd_data))
+                if cmd != self.CMD_TTY:
+                    log.verb("decoded data: %s" % cmd_data)
         if ret:
             log.debug("Recursing decodeCmd")
             return self.decodeCmd()
