@@ -42,6 +42,7 @@ class SSLServerPort(ThreadingSSLServer):
         self.socket.postConnectionCheck = self.util.postConnectionCheck
         self.util.sock = self.socket
         self._shutdown = False
+        self.servers = {}
 
     def handle_error(self, request, client_address):
         (foo, e, bar) = sys.exc_info()
@@ -61,13 +62,24 @@ class SSLServerPort(ThreadingSSLServer):
     def shutdown(self):
         self._shutdown = True
         ThreadingSSLServer.shutdown(self)
+        for server in self.servers:
+            server.quit()
+
+    def setServer(self, name, server):
+        if name in self.servers:
+            self.servers[name].quit()
+        self.servers[name] = server
+
+    def getServer(self, name):
+        return self.servers[name]
+
 
 class SSLServer(Server):
-    def __init__(self, request, client_address, server):
-        super(SSLServer, self).__init__(server.options)
+    def __init__(self, request, client_address, serverport):
+        super(SSLServer, self).__init__(serverport.options)
         self.request = request
         self.client_address= client_address
-        self.server = server
+        self.serverport = serverport
         log.info("Connection from: %s:%s", str(client_address[0]),
                  str(client_address[1]))
         self.run()
@@ -75,3 +87,14 @@ class SSLServer(Server):
     def setupInOut(self):
         self.fdin = self.request
         self.fdout = self.request
+
+    def reset(self):
+        super(SSLServer, self).reset()
+        self.serverport.setServer(self.name, self)
+
+    def resume(self, acked, old):
+        old = self.serverport.getServer(self.name)
+        if not old:
+            raise Exception("Resume on unknown session: " + self.name)
+        super(SSLServer, self).resume(acked, old)
+        self.serverport.setServer(self.name, self)

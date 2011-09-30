@@ -41,7 +41,7 @@
 (defun remacs-process-setup (proc frame tty-name xml child)
   (let ((tty (xml-get-children child 'tty))
         (env (xml-get-children child 'env))
-        (id (xml-get-children child 'id))
+        (session (xml-get-children child 'session))
         (filter (xml-get-children child 'filter))
         (envvar) (tty-name) (tty-term) (filters))
     ;; <env>
@@ -54,8 +54,8 @@
     (setq tty-name (xml-get-attribute tty 'name)
           frame (remacs-create-tty-frame
                  tty-name (xml-get-attribute tty 'term) proc))
-    ;; <id>
-    (process-put proc 'id (xml-get-attribute id 'name))
+    ;; <session>
+    (process-put proc 'id (xml-get-attribute session 'name))
     ;; <filter>
     (when filter
       (dolist (f (xml-node-children filter))

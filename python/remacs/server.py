@@ -36,6 +36,10 @@ class Server(object):
         self.fdout = None
         self.sock = None
         self.emacs_pid = None
+        self.name = None
+        self.mgr = None
+        self.tty = None
+        self.slave = None
 
     def setupInOut(self):
         self.fdin = sys.stdin
@@ -47,20 +51,38 @@ class Server(object):
         log.info("connected to emacs server")
         self.sock.setblocking(0)
         log.debug("sock fd=%d" % self.sock.fileno())
+        self.mgr.setExtras([self.sock], self.sock_cb)
 
     def setupTTY(self):
         (self.tty, self.slave) = pty.openpty()
         self.tty = os.fdopen(self.tty, "r+", 0)
         fcntl.ioctl(self.tty, termios.TIOCSWINSZ,
                     struct.pack("HHHH", 24, 80, 0, 0))
+
+    def reset(self):
+        log.debug("Reseting session %s", self.name)
+        self.setupSock()
+        self.setupTTY()
+        self.mgr.setTTY(self.tty)
+        
+    def resume(self, acked, old):
+        log.debug("Resuming session %s with acked=%s", self.name, acked)
+        # Take over the resources from the old server
+        self.sock = old.sock
+        old.sock = None
+        self.emacs_pid = old.emacs_pid
+        self.tty = old.tty
+        old.tty = None
+        self.slave = old.slave
+        old.slave = None
+        self.mgr.setTTY(self.tty)
         
     def run(self):
         try:
             self.setupInOut()
-            self.setupSock()
-            self.setupTTY()
-            self.mgr = TTYManager(self.fdin, self.fdout, self.tty, self.cmd_cb,
-                                  [self.sock], self.sock_cb)
+            # self.setupSock()
+            # self.setupTTY()
+            self.mgr = TTYManager(self.fdin, self.fdout, self.tty, self.cmd_cb)
             self.mgr.run()
         except Exception, e:
             log.exception("Main loop exception", e)
@@ -118,14 +140,31 @@ class Server(object):
             elem = d.firstChild
             if elem.nodeName in ["query"]:
                 if elem.firstChild.nodeName == "setup":
+                    session = elem.firstChild.getElementsByTagName("session")
+                    if session:
+                        session = session[0]
+                        name = session.getAttribute("name")
+                        acked = session.getAttribute("acked")
+                        action = session.getAttribute("action")
+                        if not self.name:
+                            self.name = name
+                            if action == "reset":
+                                self.reset()
+                            elif action == "resume":
+                                self.resume(acked, None)
+                    if not self.name or not self.sock:
+                        raise Exception("Invalid setup command from client, "
+                                        "no session name")
                     tty = elem.firstChild.getElementsByTagName("tty")
                     if tty:
                         tty = tty[0]
-                        row = int(tty.getAttribute("row"))
-                        col = int(tty.getAttribute("col"))
-                        buff = struct.pack("HHHH", row, col, 0, 0)
-                        log.verb("Setting winsize: %s %s" % (row, col))
-                        fcntl.ioctl(self.tty, termios.TIOCSWINSZ, buff)
+                        if tty.getAttribute("row"):
+                            self.row = int(tty.getAttribute("row"))
+                            self.col = int(tty.getAttribute("col"))
+                            buff = struct.pack("HHHH", self.row, self.col, 0, 0)
+                            log.verb("Setting winsize: %s %s" %
+                                     (self.row, self.col))
+                            fcntl.ioctl(self.tty, termios.TIOCSWINSZ, buff)
                         tty.setAttribute("name", os.ttyname(self.slave))
                 self.sendToEmacs(toxml(elem))
             else:

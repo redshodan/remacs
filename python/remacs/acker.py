@@ -34,11 +34,11 @@ class InAcker(object):
 
     def inPacket(self):
         self.pkt_count = self.pkt_count + 1
+        log.debug("ACK: inPacket: %d", self.pkt_count)
         if self.pkt_count - self.ack_cur >= self.ack_window:
             log.debug("ACK: Sending ack for %d", self.pkt_count)
             self.outpipe.sendCmd(PipeBuff.CMD_ACK, self.pkt_count)
             self.ack_cur = self.pkt_count
-        log.debug("ACK: inPacket: %d", self.pkt_count)
 
 
 class OutAcker(object):

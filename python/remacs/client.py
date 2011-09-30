@@ -36,6 +36,8 @@ class Client(object):
         self.fdout = None
         self.mgr = None
         self.tray = None
+        self.first_setup = True
+        self.resuming = False
         self.emacs_suspended = False
         self.cmd = (self.options.transport + " -T " + self.options.host +
                     " remacs --server")
@@ -102,17 +104,33 @@ class Client(object):
         log.info("Client.quit")
         self.mgr.quit()
 
+    def sendSetup(self):
+        tty = ("<tty term='%s' row='%d' col='%d'/>" %
+               (self.term, self.row, self.col))
+        if self.first_setup:
+            action = "action='reset'"
+            self.first_setup = False
+        elif self.resuming:
+            action = "action='resume'"
+            self.resuming = False
+        else:
+            action = None
+        if action:
+            session = ("<session name='%s' acked='%d' %s/>" %
+                       (self.options.id, self.mgr.getAcked(), action))
+        else:
+            session = ""
+        self.mgr.sendCmd(
+            PipeBuff.CMD_CMD,
+            "<query><setup>%s%s</setup></query>" % (tty, session))
+
     def sigWINCH(self, signum=None, frame=None):
         try:
             buff = 'abcdefgh'
             buff = fcntl.ioctl(self.tty, termios.TIOCGWINSZ, buff)
-            (row, col, x, y) = struct.unpack("HHHH", buff)
+            (self.row, self.col, x, y) = struct.unpack("HHHH", buff)
             log.verb("winsize %d: %s" % (len(buff), buff))
-            self.mgr.sendCmd(
-                PipeBuff.CMD_CMD,
-                ("<query><setup><tty term='%s' row='%d' col='%d'/>" +
-                     "<id name='%s'/></setup></query>") %
-                (self.term, row, col, self.options.id))
+            self.sendSetup()
         except Exception, e:
             log.exception("sigWINCH: %s" % str(e))
             import traceback

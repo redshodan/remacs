@@ -109,7 +109,7 @@ class Pipe(object):
                 raise PipeConnLost("Connection lost")
         if self.buff.data:
             self.buff.filterData()
-        if self.buff.output:
+        if self.ofd and self.buff.output:
             try:
                 log.debug("write(%d) %s" % (self.ofd.fileno(), self.buff.output))
                 size = self.ofd.write(self.buff.output)
