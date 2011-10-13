@@ -1,3 +1,4 @@
+********************************************************************************
 X11 idle interface from Gajim:
 
 /*      common/idle.c
@@ -24,8 +25,10 @@ X11 idle interface from Gajim:
  * You should have received a copy of the GNU General Public Licens
  * along with Gajim.  If not, see <http://www.gnu.org/licenses/>.
 */
+********************************************************************************
 
 
+********************************************************************************
 X11 screensaver controls from synergy2:
 
 /*
@@ -44,8 +47,10 @@ X11 screensaver controls from synergy2:
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
+********************************************************************************
 
 
+********************************************************************************
 Some elisp XML functions from jabber.el:
 
 ;; jabber.el - a minimal jabber client
@@ -71,8 +76,10 @@ Some elisp XML functions from jabber.el:
 ;; You should have received a copy of the GNU General Public License
 ;; along with this program; if not, write to the Free Software
 ;; Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+********************************************************************************
 
 
+********************************************************************************
 M2Crypto library:
 Copyright (c) 1999-2004 Ng Pheng Siong. All rights reserved.
 
@@ -100,3 +107,4 @@ DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
 THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT 
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE 
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+********************************************************************************
