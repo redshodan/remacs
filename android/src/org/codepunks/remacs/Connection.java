@@ -24,6 +24,7 @@ package org.codepunks.remacs;
 
 import android.app.NotificationManager;
 import android.app.PendingIntent;
+import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.util.Log;
@@ -38,6 +39,7 @@ import org.codepunks.remacs.RemacsCfg;
 import org.codepunks.remacs.console.ConsoleView;
 import org.codepunks.remacs.transport.Transport;
 import org.codepunks.remacs.transport.TransportSSH;
+import org.codepunks.remacs.transport.TransportSSL;
 
 public class Connection
 {
@@ -78,7 +80,8 @@ public class Connection
         mView = view;
         mView.setup(this);
         mNotify = notify;
-        mTransport = new TransportSSH(this);
+        // mTransport = new TransportSSH(this);
+        mTransport = new TransportSSL(this);
         mTransport.start();
     }
 
@@ -248,5 +251,10 @@ public class Connection
         // intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         // mAct.startActivity(intent);
         mAct.suspend();
+    }
+
+    public Context getContext()
+    {
+        return mView.getContext();
     }
 }

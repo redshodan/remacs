@@ -22,12 +22,35 @@
 
 package org.codepunks.remacs.transport;
 
+import android.content.Context;
 import android.util.Log;
 
+import java.io.ByteArrayInputStream;
+import java.io.DataInputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.net.Socket;
+import java.security.KeyStore;
+import java.security.KeyFactory;
+import java.security.PrivateKey;
+import java.security.cert.Certificate;
+import java.security.cert.CertificateFactory;
+import java.security.spec.PKCS8EncodedKeySpec;
+import java.util.Collection;
+import java.util.Iterator;
+import javax.net.ssl.KeyManager;
+import javax.net.ssl.KeyManagerFactory;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLSessionContext;
+import javax.net.ssl.SSLSocket;
+import javax.net.ssl.SSLSocketFactory;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.TrustManagerFactory;
+// import android.net.SSLSessionCache;
 
 import org.codepunks.remacs.Connection;
 import org.codepunks.remacs.RemacsCfg;
@@ -38,73 +61,215 @@ public class TransportSSL
 {
     protected static final String TAG = "Remacs";
     static public final int DEFAULT_PORT = 4747;
+    static public final int DEFAULT_TIMEOUT = 600000;
 
+    // protected SSLSessionCache mSessCache;
     protected SSLSocket mSock;
-    protected Session mSess;
     protected InputStream mStdout;
     protected OutputStream mStdin;
+    protected String mClientKey;
+    protected String mCAKey;
+    protected char[] mStorePass;
     
-    public TransportSSH(Connection conn)
+    public TransportSSL(Connection conn)
     {
         super(conn, DEFAULT_PORT);
+        mStorePass = new String("remacs").toCharArray();
+        mClientKey = "remacs";
+        mCAKey = "remacs-ca";
     }
 
     @Override public void stop()
     {
-        mSshConn.close();
+        if (mSock != null)
+        {
+            try
+            {
+                mSock.close();
+            }
+            catch (IOException e)
+            {
+            }
+        }
         super.stop();
     }
 
-    @Override public void connect()
+    public static byte[] fullStream(InputStream fis)
+        throws IOException
     {
-        Log.d(TAG, "Connecting...");
+        DataInputStream dis = new DataInputStream(fis);
+        byte[] bytes = new byte[dis.available()];
+        dis.readFully(bytes);
+        return bytes;
+    }
+
+    public Certificate[] loadCert(String path)
+        throws Exception
+    {
+        FileInputStream certf = new FileInputStream(path);
+        CertificateFactory cf = CertificateFactory.getInstance("X.509");
+        Collection c = cf.generateCertificates(certf) ;
+        Certificate[] certs = new Certificate[c.toArray().length];
+
+        if (c.size() == 1) {
+            certf = new FileInputStream("/sdcard/remacs.cert");
+            Certificate cert = cf.generateCertificate(certf) ;
+            certs[0] = cert;
+        } else {
+            System.out.println("Certificate chain length: "+c.size());
+            certs = (Certificate[])c.toArray();
+        }
+
+        return certs;
+    }
+    
+    public KeyStore loadKeystore()
+    {
         try
         {
-            mSshConn = new ch.ethz.ssh2.Connection(mConn.getConfig().host,
-                                                   mConn.getConfig().getPort());
-            mSshConn.addConnectionMonitor(this);
-            mSshConn.connect();
-            mSshConn.authenticateWithPassword(mConn.getConfig().user,
-                                           mConn.getConfig().pass);
+            // Private key
+            FileInputStream keyf = new FileInputStream("/sdcard/remacs.key");
+            byte[] keyb = fullStream(keyf);
+            KeyFactory kf = KeyFactory.getInstance("RSA");
+            PKCS8EncodedKeySpec keysp = new PKCS8EncodedKeySpec(keyb);
+            PrivateKey pkey = kf.generatePrivate(keysp);
 
-            mSess = mSshConn.openSession();
-			mSess.execCommand("remacs --server");
-            // mSess.requestPTY(mCfg.term, mCfg.term_width, mCfg.term_height, 0, 0,
-            //                  null);
-            // mSess.startShell();
-            mStdout = new StreamGobbler(mSess.getStdout());
-            mStdin = mSess.getStdin();
-            mConnected = true;
-            Log.d(TAG, "...Connected");
+            // Certificate
+            Certificate[] cert = loadCert("/sdcard/remacs.cert");
+            
+            // CA cert
+            Certificate[] cacert = loadCert("/sdcard/remacs.cacert");
+
+            // Keystore
+            KeyStore ks = KeyStore.getInstance(KeyStore.getDefaultType());
+            ks.load(null, mStorePass);
+            ks.setKeyEntry(mClientKey, pkey, mStorePass, cert);
+            ks.setCertificateEntry(mCAKey, cacert[0]);
+            FileOutputStream kso =
+                mConn.getContext().openFileOutput("remacs.ks",
+                                                  Context.MODE_PRIVATE);
+            ks.store(kso, mStorePass);
+            
+            return ks;
         }
-        catch (IOException e)
+        catch (Exception e)
         {
             Log.e(TAG, "Failed to connect", e);
             putString("Failed to connect: " + e.getMessage());
         }
+        return null;
+    }
+
+    public KeyStore loadCAKeystore()
+    {
+        try
+        {
+            // CA cert
+            Certificate[] cacert = loadCert("/sdcard/remacs.cacert");
+
+            // Keystore
+            KeyStore ks = KeyStore.getInstance(KeyStore.getDefaultType());
+            ks.load(null, mStorePass);
+            ks.setCertificateEntry(mCAKey, cacert[0]);
+            FileOutputStream kso =
+                mConn.getContext().openFileOutput("remacs-ca.ks",
+                                                  Context.MODE_PRIVATE);
+            ks.store(kso, null);
+            
+            return ks;
+        }
+        catch (Exception e)
+        {
+            Log.e(TAG, "Failed to connect", e);
+            putString("Failed to connect: " + e.getMessage());
+        }
+        return null;
+    }
+    
+    @Override public boolean connect()
+    {
+        Log.d(TAG, "Connecting...");
+        try
+        {
+            KeyStore ks = loadKeystore();
+            KeyStore ks_ca = loadCAKeystore();
+            if ((ks == null) || (ks_ca == null))
+            {
+                return false;
+            }
+            
+            KeyManagerFactory keyfty = KeyManagerFactory.getInstance(
+                KeyManagerFactory.getDefaultAlgorithm());
+            keyfty.init(ks, mStorePass);
+            KeyManager keys[] = keyfty.getKeyManagers();
+            Log.d(TAG, String.format("keys: %d", keys.length));
+            int i;
+            for (i = 0; i < keys.length; ++i)
+            {
+                Log.d(TAG, String.format("key: %s", keys[i].toString()));
+            }
+            TrustManagerFactory trustfty = TrustManagerFactory.getInstance(
+                TrustManagerFactory.getDefaultAlgorithm());
+            trustfty.init(ks_ca);
+            TrustManager[] trusts = trustfty.getTrustManagers();
+            SSLContext ctx = SSLContext.getInstance("tlsv1");
+            ctx.init(keys, trusts, null);
+            SSLSocketFactory sockfty = ctx.getSocketFactory();
+
+            // mSock = sockfty.createSocket(
+            //     mConn.getConfig().host, mConn.getConfig().getPort());
+            mSock = (SSLSocket)sockfty.createSocket(mConn.getConfig().host,
+                                                    DEFAULT_PORT);
+            mSock.setUseClientMode(true);
+            mSock.setWantClientAuth(true);
+            mStdout = mSock.getInputStream();
+            mStdin = mSock.getOutputStream();
+            mConnected = true;
+            Log.d(TAG, "...Connected");
+            return true;
+        }
+        catch (Exception e)
+        {
+            Log.e(TAG, "Failed to connect", e);
+            putString("Failed to connect: " + e.getMessage());
+        }
+        return false;
     }
     
     @Override public int read(byte[] buffer, int offset, int length)
         throws IOException
     {
-        int count = mStdout.read(buffer, offset, length);
-        
-        if (count <= 0)
+        if (mStdout != null)
         {
-            stop();
-        }
+            int count = mStdout.read(buffer, offset, length);
+            
+            if (count <= 0)
+            {
+                stop();
+            }
 
-        return count;
+            return count;
+        }
+        else
+        {
+            return 0;
+        }
     }
 
     @Override public void write(byte[] buffer) throws IOException
     {
-        mStdin.write(buffer);
+        if (mStdin != null)
+        {
+            mStdin.write(buffer);
+        }
     }
     
     @Override public void write(int c) throws IOException
     {
-        mStdin.write(c);
+        if (mStdin != null)
+        {
+            mStdin.write(c);
+        }
     }
     
     @Override public void flush() throws IOException

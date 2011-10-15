@@ -150,7 +150,11 @@ public abstract class Transport implements Runnable
 
     public void run()
     {
-        connect();
+        if (!connect())
+        {
+            return;
+        }
+        
         mConn.sendTTY();
         
         try
@@ -299,7 +303,7 @@ public abstract class Transport implements Runnable
         return mConnected;
     }
     
-    public abstract void connect();
+    public abstract boolean connect();
     public abstract int read(byte[] buffer, int offset, int length)
         throws IOException;
     public abstract void write(byte[] buffer) throws IOException;

@@ -61,7 +61,7 @@ public class TransportSSH
         super.stop();
     }
 
-    @Override public void connect()
+    @Override public boolean connect()
     {
         Log.d(TAG, "Connecting...");
         try
@@ -82,12 +82,14 @@ public class TransportSSH
             mStdin = mSess.getStdin();
             mConnected = true;
             Log.d(TAG, "...Connected");
+            return true;
         }
         catch (IOException e)
         {
             Log.e(TAG, "Failed to connect", e);
             putString("Failed to connect: " + e.getMessage());
         }
+        return false;
     }
     
     @Override public int read(byte[] buffer, int offset, int length)
