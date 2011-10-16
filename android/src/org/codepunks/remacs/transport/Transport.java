@@ -67,7 +67,7 @@ public abstract class Transport implements Runnable
     protected char[] mChars;
     // Remacs Protocol handling
     protected long mCmd = CMD_NONE;
-    protected long mCmdLength = 0;
+    protected long mCmdLength = -1;
     
     public Transport(Connection conn, int def_port)
     {
@@ -105,12 +105,23 @@ public abstract class Transport implements Runnable
     {
         try
         {
+            boolean isack = (cmd == CMD_ACK);
             long length = data.length;
+            byte[] cbuff;
             // Log.d(TAG, String.format("Sending cmd=%d len=%d", cmd, length));
 
-            if ((data != null) && (length > 0))
+            if (isack)
             {
-                byte[] cbuff;
+                cmd = cmd + CMD_SIZE_MAXED;
+                cbuff = new byte[5];
+                cbuff[0] = (byte)(cmd & 0xFF);
+                cbuff[1] = data[3];
+                cbuff[2] = data[2];
+                cbuff[3] = data[1];
+                cbuff[4] = data[0];
+            }
+            else if ((data != null) && (length > 0))
+            {
                 long offset;
                 if (length <= CMD_SIZE_MAX)
                 {
@@ -135,12 +146,17 @@ public abstract class Transport implements Runnable
                 {
                     cbuff[(int)(offset + i)] = data[i];
                 }
-                write(cbuff);
             }
             else
             {
-                write((byte)(cmd & 0xFF));
+                cbuff = new byte[1];
+                cbuff[0] = (byte)(cmd & 0xFF);
             }
+            // if (!isack)
+            // {
+            //     outAcker.outPacket(cbuff);
+            // }
+            write(cbuff);
         }
         catch (IOException ex)
         {
@@ -155,7 +171,7 @@ public abstract class Transport implements Runnable
             return;
         }
         
-        mConn.sendTTY();
+        mConn.sendSetup();
         
         try
         {
@@ -189,13 +205,13 @@ public abstract class Transport implements Runnable
                         {
                             mCmd = mBBuff.get();
                             mCmd = (mCmd & 0xFF);
-                            // Log.d(TAG, String.format("unpacked cmd=%d", mCmd));
+                            //Log.d(TAG, String.format("unpacked cmd=%d", mCmd));
                         }
-                        if (mCmdLength == 0)
+                        if (mCmdLength == -1)
                         {
                             if ((mCmd & CMD_SIZE_MAXED) == CMD_SIZE_MAXED)
                             {
-                                // Log.d(TAG, "size maxed, getting next 4 bytes");
+                                //Log.d(TAG, "size maxed, getting next 4 bytes");
                                 try
                                 {
                                     mCmdLength = mBBuff.getInt();
@@ -211,8 +227,17 @@ public abstract class Transport implements Runnable
                             }
                             mCmd = mCmd & CMD_MAX;
                             // Log.d(TAG,
-                            //       String.format("Decoded mCmd=%d mCmdLength=%d",
+                            //     String.format("Decoded mCmd=%d mCmdLength=%d",
                             //                     mCmd, mCmdLength));
+                        }
+                        if (mCmd == CMD_ACK)
+                        {
+                            Log.d(TAG, String.format("Got ack %d", mCmdLength));
+                            int acked = (int)mCmdLength;
+                            mCmd = CMD_NONE;
+                            mCmdLength = -1;
+                            // mOutAcker.handleAck(mAcked);
+                            continue;
                         }
                         int blen = mBBuff.remaining();
                         if (blen < mCmdLength)
@@ -227,7 +252,7 @@ public abstract class Transport implements Runnable
                         {
                             decodeStringData(blen);
                             mCmd = CMD_NONE;
-                            mCmdLength = 0;
+                            mCmdLength = -1;
                         }
                     }
                     catch (IndexOutOfBoundsException e)
@@ -263,9 +288,14 @@ public abstract class Transport implements Runnable
             mBBuff.limit(mBBuff.position());
             mBBuff.position(0);
         }
-
-        // Log.d(TAG, String.format("decodeStringData: length=%d size=%d", length,
-        //                          mCBuff.position()));
+        // Log.d(TAG, String.format("decodeStringData: length=%d size=%d",
+        //                          length, mCBuff.position()));
+        
+        // if (mCmd != CMD_ACK)
+        // {
+        //     self.inAcker.inPacket();
+        // }
+        
         if (mCmd == CMD_TTY)
         {
             // Log.d(TAG, "TTY DATA");
@@ -301,6 +331,12 @@ public abstract class Transport implements Runnable
     public boolean isConnected()
     {
         return mConnected;
+    }
+
+    public int getAcked()
+    {
+        // return mInAcker.ack_cur;
+        return 0;
     }
     
     public abstract boolean connect();

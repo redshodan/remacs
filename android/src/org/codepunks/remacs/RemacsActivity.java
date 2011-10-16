@@ -243,6 +243,7 @@ public class RemacsActivity extends Activity
         mRcfg = new RemacsCfg();
         mRcfg.def_port = 22;
         mRcfg.def_term_scrollback = 100;
+        mRcfg.id = "android";
     }
     
     protected void loadPrefs()
@@ -258,6 +259,7 @@ public class RemacsActivity extends Activity
         String term = "screen";
         int scrollback = 100;
 
+        defaultPrefs();
         try
         {
             host = sp.getString("hostname", "10.0.2.2");
@@ -270,7 +272,6 @@ public class RemacsActivity extends Activity
         catch (ClassCastException e)
         {
             Log.d(TAG, "loadPrefs: failed");
-            defaultPrefs();
         }
 
         ConnectionCfg cfg = new ConnectionCfg();

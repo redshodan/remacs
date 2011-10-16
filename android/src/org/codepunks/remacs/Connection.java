@@ -51,6 +51,8 @@ public class Connection
     protected Transport mTransport;
     protected ConsoleView mView;
     protected RemacsNotify mNotify;
+    protected boolean mFirstSetup = true;
+    protected boolean mResuming = false;
 
     protected DocumentBuilder mParser;
     protected byte[] mCharBuff = new byte[1];
@@ -123,20 +125,39 @@ public class Connection
         }
         mCfg.term_width = width;
         mCfg.term_height = height;
-        sendTTY();
+        sendSetup();
     }
 
-    public void sendTTY()
+    public void sendSetup()
     {
         if (!mTransport.isConnected())
         {
             return;
         }
-        
-        String data =
-            String.format("<query><setup><tty term='%s' row='%d' col='%d'/>" +
-                          "</setup></query>", mCfg.term, mCfg.term_height,
-                          mCfg.term_width);
+
+        String tty = String.format("<tty term='%s' row='%d' col='%d'/>",
+                                   mCfg.term, mCfg.term_height,
+                                   mCfg.term_width);
+        String action = null;
+        if (mFirstSetup)
+        {
+            action = "action='reset'";
+            mFirstSetup = true;
+        }
+        else if (mResuming)
+        {
+            action = "action='resume'";
+            mResuming = false;
+        }
+        String session = "";
+        if (action != null)
+        {
+            session = String.format("<session name='%s' acked='%d' %s/>",
+                                    mRcfg.id, mTransport.getAcked(), action);
+                                    
+        }
+        String data = String.format("<query><setup>%s%s</setup></query>",
+                                    tty, session);
         mTransport.sendCmd(Transport.CMD_CMD, data);
     }
 
@@ -247,7 +268,7 @@ public class Connection
     {
         // Intent intent =
         //     new Intent(Intent.ACTION_VIEW,
-        //                Uri.parse(String.format("remacs://%s/minimize", "host")));
+        //             Uri.parse(String.format("remacs://%s/minimize", "host")));
         // intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         // mAct.startActivity(intent);
         mAct.suspend();
