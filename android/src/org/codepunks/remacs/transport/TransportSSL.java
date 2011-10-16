@@ -39,6 +39,7 @@ import java.security.KeyFactory;
 import java.security.PrivateKey;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateFactory;
+import java.security.cert.X509Certificate;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.util.Collection;
 import java.util.Iterator;
@@ -50,7 +51,8 @@ import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
-// import android.net.SSLSessionCache;
+import javax.net.ssl.X509KeyManager;
+import javax.net.ssl.X509TrustManager;
 
 import org.codepunks.remacs.Connection;
 import org.codepunks.remacs.RemacsCfg;
@@ -61,9 +63,7 @@ public class TransportSSL
 {
     protected static final String TAG = "Remacs";
     static public final int DEFAULT_PORT = 4747;
-    static public final int DEFAULT_TIMEOUT = 600000;
 
-    // protected SSLSessionCache mSessCache;
     protected SSLSocket mSock;
     protected InputStream mStdout;
     protected OutputStream mStdin;
@@ -111,12 +111,14 @@ public class TransportSSL
         Collection c = cf.generateCertificates(certf) ;
         Certificate[] certs = new Certificate[c.toArray().length];
 
-        if (c.size() == 1) {
-            certf = new FileInputStream("/sdcard/remacs.cert");
-            Certificate cert = cf.generateCertificate(certf) ;
+        if (c.size() == 1)
+        {
+            certf = new FileInputStream(path);
+            Certificate cert = cf.generateCertificate(certf);
             certs[0] = cert;
-        } else {
-            System.out.println("Certificate chain length: "+c.size());
+        }
+        else
+        {
             certs = (Certificate[])c.toArray();
         }
 
@@ -136,15 +138,11 @@ public class TransportSSL
 
             // Certificate
             Certificate[] cert = loadCert("/sdcard/remacs.cert");
-            
-            // CA cert
-            Certificate[] cacert = loadCert("/sdcard/remacs.cacert");
 
             // Keystore
             KeyStore ks = KeyStore.getInstance(KeyStore.getDefaultType());
             ks.load(null, mStorePass);
             ks.setKeyEntry(mClientKey, pkey, mStorePass, cert);
-            ks.setCertificateEntry(mCAKey, cacert[0]);
             FileOutputStream kso =
                 mConn.getContext().openFileOutput("remacs.ks",
                                                   Context.MODE_PRIVATE);
@@ -154,8 +152,8 @@ public class TransportSSL
         }
         catch (Exception e)
         {
-            Log.e(TAG, "Failed to connect", e);
-            putString("Failed to connect: " + e.getMessage());
+            Log.e(TAG, "Failed to load cert", e);
+            putString("Failed to load cert: " + e.getMessage());
         }
         return null;
     }
@@ -169,7 +167,7 @@ public class TransportSSL
 
             // Keystore
             KeyStore ks = KeyStore.getInstance(KeyStore.getDefaultType());
-            ks.load(null, mStorePass);
+            ks.load(null, null);
             ks.setCertificateEntry(mCAKey, cacert[0]);
             FileOutputStream kso =
                 mConn.getContext().openFileOutput("remacs-ca.ks",
@@ -180,8 +178,8 @@ public class TransportSSL
         }
         catch (Exception e)
         {
-            Log.e(TAG, "Failed to connect", e);
-            putString("Failed to connect: " + e.getMessage());
+            Log.e(TAG, "Failed to load CAcert", e);
+            putString("Failed to load CAcert: " + e.getMessage());
         }
         return null;
     }
@@ -202,26 +200,31 @@ public class TransportSSL
                 KeyManagerFactory.getDefaultAlgorithm());
             keyfty.init(ks, mStorePass);
             KeyManager keys[] = keyfty.getKeyManagers();
-            Log.d(TAG, String.format("keys: %d", keys.length));
-            int i;
-            for (i = 0; i < keys.length; ++i)
-            {
-                Log.d(TAG, String.format("key: %s", keys[i].toString()));
-            }
+            // X509Certificate[] x5s =
+            //     ((X509KeyManager)keys[0]).getCertificateChain(mClientKey);
+            // Log.d(TAG, String.format("keys: %d", keys.length));
+            // int i;
+            // for (i = 0; i < keys.length; ++i)
+            // {
+            //     Log.d(TAG, String.format("key: %s", keys[i].toString()));
+            //     Log.d(TAG, String.format("key: %s", x5s[i].toString()));
+            // }
             TrustManagerFactory trustfty = TrustManagerFactory.getInstance(
                 TrustManagerFactory.getDefaultAlgorithm());
             trustfty.init(ks_ca);
             TrustManager[] trusts = trustfty.getTrustManagers();
+            // x5s = ((X509TrustManager)trusts[0]).getAcceptedIssuers();
+            // Log.d(TAG, String.format("cacerts: %d", x5s.length));
+            // for (i = 0; i < x5s.length; ++i)
+            // {
+            //     Log.d(TAG, String.format("cacert: %s", x5s[i].toString()));
+            // }
+
             SSLContext ctx = SSLContext.getInstance("tlsv1");
             ctx.init(keys, trusts, null);
             SSLSocketFactory sockfty = ctx.getSocketFactory();
-
-            // mSock = sockfty.createSocket(
-            //     mConn.getConfig().host, mConn.getConfig().getPort());
             mSock = (SSLSocket)sockfty.createSocket(mConn.getConfig().host,
                                                     DEFAULT_PORT);
-            mSock.setUseClientMode(true);
-            mSock.setWantClientAuth(true);
             mStdout = mSock.getInputStream();
             mStdin = mSock.getOutputStream();
             mConnected = true;
