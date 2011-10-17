@@ -2,11 +2,10 @@
 
 export PATH=.:$PATH
 
-rm -f client.log ~/server.log sslclient.log sslserver.log
-
 if [ "$1" = "emacs" ]; then
     exec emacs -nw -q --eval "(progn (add-to-list 'load-path \"elisp\")(find-file-noselect \"elisp/remacs.el\" t)(eval-buffer (get-buffer \"remacs.el\"))(remacs-test))"
 elif [ "$1" = "sslserver" ]; then
+    rm -f client.log ~/server.log sslclient.log sslserver.log
     ./remacs -sS -c tests/certs/server1.pem -C tests/certs/cacert1.pem -i server1
 elif [ "$1" = "sslclient" ]; then
     ./remacs -S -c tests/certs/client1.pem -C tests/certs/cacert1.pem -i client1 localhost

@@ -26,10 +26,12 @@ import signal, subprocess
 from remacs import log, dom, toxml
 from remacs.pipebuff import PipeBuff
 from remacs.ttymanager import TTYManager
+from remacs.protocolbase import ProtocolBase
 
 
-class Client(object):
+class Client(ProtocolBase):
     def __init__(self, options):
+        super(Client, self).__init__(options)
         self.options = options
         self.fdin = None
         self.fdout = None
@@ -86,7 +88,7 @@ class Client(object):
             signal.signal(signal.SIGWINCH, self.sigWINCH)
             log.debug("self.fdin: %s" % self.fdin.fileno())
             log.debug("self.fdout: %s" % self.fdout.fileno())
-            self.mgr = TTYManager(self.fdin, self.fdout, self.tty, self.cmdCB)
+            self.setMgr(TTYManager(self.fdin, self.fdout, self.tty, self.cmdCB))
             self.sigWINCH()
             self.mgr.run()
         except Exception, e:
@@ -119,9 +121,8 @@ class Client(object):
                        (self.options.id, self.mgr.getAcked(), action))
         else:
             session = ""
-        self.mgr.sendCmd(
-            PipeBuff.CMD_CMD,
-            "<query><setup>%s%s</setup></query>" % (tty, session))
+        self.sendCmd("<query from='%s' type='set'><setup>%s%s</setup></query>" %
+                     (self.options.id, tty, session))
 
     def sigWINCH(self, signum=None, frame=None):
         try:
@@ -137,53 +138,65 @@ class Client(object):
             print e
 
     def cmdCB(self, cmd, data):
-        log.verb("client.cmdCB: %s" % data)
+        log.verb("CLIENT CMD: %d DATA: %s" % (cmd, data))
         if cmd == PipeBuff.CMD_CMD:
             d = dom.parseString(data)
             elem = d.firstChild
             if elem.nodeName == "query":
-                child = elem.firstChild
-                if child.nodeName == "error":
-                    error = child.firstChild.data
-                    self.tray.error(error)
-                elif child.nodeName == "notify":
-                    if elem.getAttribute("type") == "set":
-                        title = child.firstChild.firstChild.data
-                        body = child.firstChild.nextSibling.firstChild.data
-                        self.tray.notify(child.getAttribute("id"),
-                                         title + " : " + body)
-                    elif elem.getAttribute("type") == "result":
-                        self.tray.clearNotify(child.getAttribute("id"))
-                elif child.nodeName == "suspend":
-                    self.emacs_suspended = True
-                    self.tray.iconify()
-                elif child.nodeName == "unidle":
-                    self.tray.xidler.unidle()
-                else:
-                    log.error("Unkown command: " + data)
+                self.handleQuery(cmd, data, elem)
             else:
                 log.error("Unkown command: " + data)
             d.unlink()
         else:
             return None
 
+    def handleQuery(self, cmd, data, elem):
+        if elem.getAttribute("type") == "error":
+            log.verb("Dropping errored query: %s" % data)
+            return
+        resp = "result"
+        child = elem.firstChild
+        if child.nodeName == "error":
+            error = child.firstChild.data
+            log.verbose("Got error: %s" % error)
+            self.tray.error(error)
+        elif child.nodeName == "notify":
+            if elem.getAttribute("type") == "set":
+                id = child.getAttribute("id")
+                title = child.firstChild.firstChild.data
+                body = child.firstChild.nextSibling.firstChild.data
+                msg = title + " : " + body
+                log.verb("Got notification: id=%s msg=%s" % (id, msg))
+                self.tray.notify(id, msg)
+            elif elem.getAttribute("type") == "result":
+                id = child.getAttribute("id")
+                log.verb("Clearing notification: %s" % id)
+                self.tray.clearNotify(id)
+        elif child.nodeName == "suspend":
+            log.verb("Suspending")
+            self.emacs_suspended = True
+            self.tray.iconify()
+        elif child.nodeName == "unidle":
+            log.verb("Unidling")
+            self.tray.xidler.unidle()
+        else:
+            log.error("Unkown command: " + data)
+            resp = "error"
+            
+        
     def invokeNotif(self, id):
-        log.info("invokeNotif: %s" % id)
-        self.mgr.sendCmd(
-            PipeBuff.CMD_CMD,
-            ("<query><notify id='%s' type='result'><invoke/></notify>" +
-             "</query>") % id)
+        log.info("Sending notification invoked: %s" % id)
+        self.sendCmd(("<query><notify id='%s' type='result'><invoke/></notify>" +
+                      "</query>") % id)
 
     def readNotif(self, id):
-        log.info("readNotif: %s" % id)
-        self.mgr.sendCmd(PipeBuff.CMD_CMD,
-                         "<query><notify id='%s' type='result'/></query>" % id)
+        log.info("Sending notification read: %s" % id)
+        self.sendCmd("<query><notify id='%s' type='result'/></query>" % id)
 
     def resumeEmacs(self):
         if self.emacs_suspended:
             self.emacs_suspended = False
-            self.mgr.sendCmd(PipeBuff.CMD_CMD, "<query><resume/></query>")
+            self.sendCmd("<query><resume/></query>")
 
     def sendUnidle(self):
-        log.info("sendUnidle")
-        self.mgr.sendCmd(PipeBuff.CMD_CMD, "<query><unidle/></query>")
+        self.sendCmd("<query type='single'><unidle/></query>")

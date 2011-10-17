@@ -80,10 +80,7 @@ class PipeBuff(object):
 
     def encodeCmd(self, cmd, data):
         isack = False
-        if cmd == self.CMD_TTY:
-            log.debug("encodeCmd:%d %s" % (cmd, data))
-        else:
-            log.verb("encodeCmd:%d %s" % (cmd, data))
+        log.debug("encodeCmd:%d %s" % (cmd, data))
         if data:
             if cmd == self.CMD_ACK:
                 isack = True
@@ -181,8 +178,7 @@ class PipeBuff(object):
             log.debug("decoded cmd_data: %s" % cmd_data)
             if cmd_data:
                 log.debug("cmd_data len: %d" % len(cmd_data))
-                if cmd != self.CMD_TTY:
-                    log.verb("decoded data: %s" % cmd_data)
+                log.verb("decoded data: %s" % cmd_data)
         if ret:
             log.debug("Recursing decodeCmd")
             return self.decodeCmd()

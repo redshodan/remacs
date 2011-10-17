@@ -24,7 +24,7 @@ import os, logging
 from logging import DEBUG, INFO, WARNING, CRITICAL
 from logging.handlers import RotatingFileHandler
 
-VERBOSE = 15
+VERB = 15
 FORMAT = "%(asctime)s - %(name)s - %(levelname)s: %(message)s"
 UI_FORMAT = "%(message)s"
 logger = None
@@ -35,7 +35,7 @@ def debug(*args, **kwargs):
     logger.debug(*args, **kwargs)
 
 def verb(*args, **kwargs):
-    logger.log(VERBOSE, *args, **kwargs)
+    logger.log(VERB, *args, **kwargs)
 
 def info(*args, **kwargs):
     logger.info(*args, **kwargs)
@@ -65,13 +65,13 @@ def getLevel():
 def init(name):
     global logger, handler, ui, uifile
 
-    logging.addLevelName(VERBOSE, "VERB")
+    logging.addLevelName(VERB, "VERB")
     logging.addLevelName(WARNING, "WARN")
     logging.addLevelName(CRITICAL, "CRIT")
 
     # Main logger
     logger = logging.getLogger(name)
-    logger.setLevel(DEBUG)
+    logger.setLevel(VERB)
     handler = RotatingFileHandler(name + ".log")
     formatter = logging.Formatter(FORMAT)
     handler.setFormatter(formatter)

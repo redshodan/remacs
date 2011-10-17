@@ -26,17 +26,18 @@ import errno
 from remacs import log, dom, toxml
 from remacs.pipebuff import PipeBuff
 from remacs.ttymanager import TTYManager
+from remacs.protocolbase import ProtocolBase
 
 
-class Server(object):
+class Server(ProtocolBase):
     def __init__(self, options):
+        super(Server, self).__init__(options)
         self.options = options
         self.fdin = None
         self.fdout = None
         self.sock = None
         self.emacs_pid = None
         self.name = None
-        self.mgr = None
         self.tty = None
         self.slave = None
 
@@ -65,6 +66,10 @@ class Server(object):
         self.mgr.setTTY(self.tty)
         
     def resume(self, acked, old):
+        if not old:
+            log.debug("Got resume on a non-resumable stream, resetting instead")
+            self.reset()
+            return False
         log.debug("Resuming session %s with acked=%s", self.name, acked)
         # Take over the resources from the old server
         self.sock = old.sock
@@ -74,14 +79,21 @@ class Server(object):
         old.tty = None
         self.slave = old.slave
         old.slave = None
+        self.mgr.inacker = old.mgr.inacker
+        old.mgr.inacker = None
+        self.mgr.inacker.outpipe = self.mgr.outpipe
+        self.mgr.outacker = old.mgr.outacker
+        old.mgr.outacker = None
         self.mgr.setTTY(self.tty)
-        
+        self.mgr.outacker.resume(acked)
+        return True
+    
     def run(self):
         try:
             self.setupInOut()
             # self.setupSock()
             # self.setupTTY()
-            self.mgr = TTYManager(self.fdin, self.fdout, self.tty, self.cmd_cb)
+            self.setMgr(TTYManager(self.fdin, self.fdout, self.tty, self.cmd_cb))
             self.mgr.run()
         except Exception, e:
             log.exception("Main loop exception", e)
@@ -108,7 +120,7 @@ class Server(object):
                 self.emacs_pid = elem.firstChild.getAttribute("pid")
                 log.info("Emacs PID=%s" % self.emacs_pid)
             else:
-                self.mgr.sendCmd(PipeBuff.CMD_CMD, buff)
+                self.sendCmd(buff)
         else:
             log.error("Invalid command from emacs")
         d.unlink()
@@ -141,6 +153,7 @@ class Server(object):
             d = dom.parseString(data)
             elem = d.firstChild
             if elem.nodeName in ["query"]:
+                sess_attr = None
                 if elem.firstChild.nodeName == "setup":
                     session = elem.firstChild.getElementsByTagName("session")
                     if session:
@@ -152,11 +165,14 @@ class Server(object):
                             self.name = name
                             if action == "reset":
                                 self.reset()
+                                sess_attr = "reset"
                             elif action == "resume":
-                                self.resume(acked, None)
-                    if not self.name or not self.sock:
-                        raise Exception("Invalid setup command from client, "
-                                        "no session name")
+                                if self.resume(acked, None):
+                                    sess_attr = "resumed"
+                                else:
+                                    sess_attr = "reset"
+                        if not self.name or not self.sock or not sess_attr:
+                            raise Exception("Invalid setup command from client")
                     tty = elem.firstChild.getElementsByTagName("tty")
                     if tty:
                         tty = tty[0]
@@ -168,7 +184,13 @@ class Server(object):
                                      (self.row, self.col))
                             fcntl.ioctl(self.tty, termios.TIOCSWINSZ, buff)
                         tty.setAttribute("name", os.ttyname(self.slave))
+                # Send upward to Emacs for its info, Emacs won't respond. I love
+                # this split server logic.
                 self.sendToEmacs(toxml(elem))
+                # Now respond
+                if sess_attr:
+                    elem.setAttribute("session", sess_attr)
+                self.respondQuery(elem)
             else:
                 log.error("Unkown command: " + data)
             d.unlink()

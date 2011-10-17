@@ -72,3 +72,6 @@ class OutAcker(object):
             log.debug("ACK: after pkt: %d", pkt[0])
         self.ack_cur = acked
         log.debug("ACK: buffer has %d packets", len(self.buffer))
+
+    def resume(self, acked):
+        pass

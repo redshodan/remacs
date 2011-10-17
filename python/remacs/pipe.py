@@ -87,7 +87,7 @@ class Pipe(object):
                     self.delList(self.ifd, self.ins)
                     return False
                 elif e.errno == errno.EAGAIN:
-                    # log.debug("EAGAIN")
+                    log.debug("EAGAIN")
                     if not self.buff.output:
                         return False
                 else:
