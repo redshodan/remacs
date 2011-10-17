@@ -91,6 +91,9 @@ class Server(object):
         finally:
             self.mgr.close()
 
+    def quit(self):
+        self.mgr.quit()
+
     def sendToEmacs(self, cmd):
         buff = cmd + "\000"
         log.verb("sendToEmacs:" + buff)
