@@ -31,7 +31,7 @@ $(M2CRYPTO_EGG): $(M2CRYPTO_SRC)
 $(M2CRYPTO_SRC): $(M2CRYPTO_TAR)
 	rm -rf $(M2CRYPTO_SRC)
 	tar -zxf $(M2CRYPTO_TAR)
-	(cd $(M2CRYPTO_SRC); patch -p2 < ../m2crypto.patch)
+	(cd $(M2CRYPTO_SRC); patch -p0 < ../m2crypto.patch)
 	(cd $(M2CRYPTO_SRC)/SWIG; patch -p0 < ../../m2crypto-nbio.patch)
 
 clean:

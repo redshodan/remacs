@@ -20,7 +20,7 @@
 # $Revision$
 #
 
-import sys
+import sys, signal, os
 
 from M2Crypto.SSL.SSLServer import ThreadingSSLServer
 from M2Crypto.SSL import SSLError
@@ -29,6 +29,11 @@ from remacs import log
 from remacs.server import Server
 from remacs import sslutil
 
+def log_accept(sock, addr):
+    log.info("TCP connection from: %s:%s" % (str(addr[0]), str(addr[1])))
+
+from M2Crypto.SSL import _Connection
+_Connection.log_accept = log_accept
 
 class SSLServerPort(ThreadingSSLServer):
     def __init__(self, options):
@@ -43,26 +48,27 @@ class SSLServerPort(ThreadingSSLServer):
         self._shutdown = False
         self.servers = {}
 
-    def handle_error(self, request, client_address):
-        (foo, e, bar) = sys.exc_info()
-        if (request == None) and hasattr(e, "sock"):
-            request = "fileno=%d" % e.sock.fileno()
-        if (client_address == None) and hasattr(e, "addr"):
-            client_address = e.addr
-        log.error("Error '%s': %s : %s", str(e), client_address, request)
+    def sighandler(self, signum, frame):
+        log.info("Caught signal, shutting down")
+        signal.signal(signal.SIGINT, signal.SIG_DFL)
+        os.kill(os.getpid(), signal.SIGINT)
+        self.shutdown()
 
     def run(self):
+        signal.signal(signal.SIGINT, self.sighandler)
         while not self._shutdown:
             try:
                 self.serve_forever()
             except SSLError:
                 self.handle_error(None, None)
+            except KeyboardInterrupt:
+                pass
 
     def shutdown(self):
         self._shutdown = True
-        ThreadingSSLServer.shutdown(self)
-        for server in self.servers:
+        for server in self.servers.values():
             server.quit()
+        ThreadingSSLServer.shutdown(self)
 
     def setServer(self, name, server):
         if name in self.servers:
@@ -72,6 +78,17 @@ class SSLServerPort(ThreadingSSLServer):
     def getServer(self, name):
         return self.servers[name]
 
+    #
+    # ThreadingSSLServer overrides
+    #
+    def handle_error(self, request, client_address):
+        (foo, e, bar) = sys.exc_info()
+        if (request == None) and hasattr(e, "sock"):
+            request = "fileno=%d" % e.sock.fileno()
+        if (client_address == None) and hasattr(e, "addr"):
+            client_address = e.addr
+        log.error("Error '%s': %s : %s", str(e), client_address, request)
+
 
 class SSLServer(Server):
     def __init__(self, request, client_address, serverport):
@@ -79,7 +96,7 @@ class SSLServer(Server):
         self.request = request
         self.client_address= client_address
         self.serverport = serverport
-        log.info("Connection from: %s:%s", str(client_address[0]),
+        log.info("Accepted SSL connection from: %s:%s", str(client_address[0]),
                  str(client_address[1]))
         self.run()
 
