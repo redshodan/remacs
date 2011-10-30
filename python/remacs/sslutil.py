@@ -64,19 +64,26 @@ class SSLUtil(object):
             raise Exception(msg)
         # Compare the peers cacert to our cacerts, just to make sure
         stack = self.sock.get_peer_cert_chain()
-        if not stack:
-            # FIXME: do extra verification in sslserver case where there was no
-            # cacert given
-            log.info("%s peer issued by: FIXME!" % (self.LOG))
-                     # str(peer_cert.get_issuer()))
-            return True
-        for ca in self.cacerts:
-            cakey = ca.get_pubkey().get_rsa().pub()
-            der = ca.as_der()
-            for peer in stack:
-                if ((cakey == peer.get_pubkey().get_rsa().pub()) and
-                    (der == peer.as_der())):
-                    log.info("%s peer signed by: %s", self.LOG, ca.get_subject())
+        if stack:
+            for ca in self.cacerts:
+                cakey = ca.get_pubkey().get_rsa().pub()
+                der = ca.as_der()
+                for peer in stack:
+                    if ((cakey == peer.get_pubkey().get_rsa().pub()) and
+                        (der == peer.as_der())):
+                        log.info("%s peer signed by: %s", self.LOG,
+                                 ca.get_subject())
+                        return True
+        else:
+            # This is sslserver case where there was no cacert given. Find a
+            # cacert in our trusted list that matches this client cert
+            for ca in self.cacerts:
+                tstack = X509.X509_Stack()
+                tstack.push(ca)
+                ret = m2.verify_cert(tstack.stack, peer_cert.x509)
+                log.verb("Verify result %d, against %s" %
+                         (ret, ca.get_subject()))
+                if ret == 1:
                     return True
         raise Exception("%s No trusted CA Cert found" % self.LOG)
     
