@@ -52,6 +52,19 @@ class RemacsTestCase(unittest.TestCase):
             log.exception("Exception during test")
             raise
 
+class DefaultOpts(object):
+    def __init__(self):
+        self.server = False
+        self.ssl = False
+        self.host = "127.0.0.1"
+        self.sslport = "4748"
+        self.cert = None
+        self.cacert = None
+        self.transport = "ssh"
+        self.no_x = True
+        self.id = "test1"
+
 
 def init():
     log.init("test")
+    log.logger.setLevel(log.DEBUG)

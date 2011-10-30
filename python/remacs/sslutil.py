@@ -49,7 +49,7 @@ class SSLUtil(object):
         self.ctx.set_cipher_list('ALL:!ADH:!LOW:!EXP:!MD5:@STRENGTH')
         self.ctx.load_verify_locations(cafile=cacert, capath=None)
         self.ctx.load_cert_chain(cert)
-        self.ctx.set_info_callback(self.sslInfoCallback)
+        self.ctx.set_info_callback(sslInfoCallback)
     
     def postConnectionCheck(self, peer_cert, peer_addr):
         log.info("%s checking: %s, %s",
@@ -88,39 +88,40 @@ class SSLUtil(object):
                 if ret == 1:
                     return True
         raise Exception("%s No trusted CA Cert found" % LOG)
-    
-    # Re-cribbed from M2Crypto's SSL/cb.py
-    # Cribbed from OpenSSL's apps/s_cb.c.
-    def sslInfoCallback(self, where, ret, ssl_ptr):
-        w = where & ~m2.SSL_ST_MASK
-        if (w & m2.SSL_ST_CONNECT):
-            state = "SSL connect"
-        elif (w & m2.SSL_ST_ACCEPT):
-            state = "SSL accept"
-        else:
-            state = "SSL state unknown"
 
-        # if (where & m2.SSL_CB_LOOP):
-        #     log.verb("LOOP: %s: %s" % (state, m2.ssl_get_state_v(ssl_ptr)))
-        if (where & m2.SSL_CB_EXIT):
-            if not ret:
-                log.warn("%s FAILED: %s: %s" %
-                         (LOG, state, m2.ssl_get_state_v(ssl_ptr)))
-            else:
-                log.verb("%s %s: %s" %
-                         (LOG, state, m2.ssl_get_state_v(ssl_ptr)))
-        elif (where & m2.SSL_CB_ALERT):
-            if (where & m2.SSL_CB_READ):
-                w = 'read'
-            else:
-                w = 'write'
-            desc = m2.ssl_get_alert_desc_v(ret)
-            msg = ("%s ALERT: %s: %s: %s" %
-                   (LOG, w, m2.ssl_get_alert_type_v(ret), desc))
-            if desc == "close notify":
-                log.verb(msg)
-            else:
-                log.warn(msg)
+
+# Re-cribbed from M2Crypto's SSL/cb.py
+# Cribbed from OpenSSL's apps/s_cb.c.
+def sslInfoCallback(where, ret, ssl_ptr):
+    w = where & ~m2.SSL_ST_MASK
+    if (w & m2.SSL_ST_CONNECT):
+        state = "SSL connect"
+    elif (w & m2.SSL_ST_ACCEPT):
+        state = "SSL accept"
+    else:
+        state = "SSL state unknown"
+        
+    # if (where & m2.SSL_CB_LOOP):
+    #     log.verb("LOOP: %s: %s" % (state, m2.ssl_get_state_v(ssl_ptr)))
+    if (where & m2.SSL_CB_EXIT):
+        if not ret:
+            log.warn("%s FAILED: %s: %s" %
+                     (LOG, state, m2.ssl_get_state_v(ssl_ptr)))
+        else:
+            log.verb("%s %s: %s" %
+                     (LOG, state, m2.ssl_get_state_v(ssl_ptr)))
+    elif (where & m2.SSL_CB_ALERT):
+        if (where & m2.SSL_CB_READ):
+            w = 'read'
+        else:
+            w = 'write'
+        desc = m2.ssl_get_alert_desc_v(ret)
+        msg = ("%s ALERT: %s: %s: %s" %
+               (LOG, w, m2.ssl_get_alert_type_v(ret), desc))
+        if desc == "close notify":
+            log.verb(msg)
+        else:
+            log.warn(msg)
 
 # Borrowed from M2Crypto.X509 and modified
 def loadAllCerts(file, format=X509.FORMAT_PEM):

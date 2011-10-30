@@ -21,29 +21,20 @@
 #
 
 
-import os, sys
-if os.path.islink(__file__):
-    path = os.path.dirname(os.readlink(__file__))
-else:
-    path = os.path.dirname(__file__)
-sys.path = [os.path.abspath(os.path.join(path, "../python"))] + sys.path
-del path
-
-import unittest
-from test import test_support
-import utils
-
-### Add test modules/packages here
-import basic, protocol
-test_modules = [basic, protocol]
+import remacs
+from remacs import log
+from remacs.pipebuff import PipeBuff
+from . import BaseProtocolTestCase, callback
 
 
-utils.init()
-
-print "Running tests..."
-print "----------------------------------------------------------------------"
-print
-ts = unittest.TestSuite()
-for module in test_modules:
-    ts.addTests(unittest.defaultTestLoader.loadTestsFromModule(module))
-test_support.run_unittest(ts)
+class BasicProtocolTests(BaseProtocolTestCase):
+    def test_basicClient(self):
+        @callback
+        def cb(cmd, data):
+            self.assertEquals(PipeBuff.CMD_CMD, cmd)
+            self.assertEquals(self.cmd, data)
+        self.init(cb)
+        self.cmd = "<query/>"
+        self.resetDone()
+        self.tty2.mgr.sendCmd(PipeBuff.CMD_CMD, self.cmd)
+        self.waitDone()

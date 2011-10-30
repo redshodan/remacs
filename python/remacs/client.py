@@ -177,8 +177,11 @@ class Client(ProtocolBase):
             self.emacs_suspended = True
             self.tray.iconify()
         elif child.nodeName == "unidle":
-            log.verb("Unidling")
-            self.tray.xidler.unidle()
+            if self.tray:
+                log.verb("Unidling")
+                self.tray.xidler.unidle()
+            else:
+                log.verb("Ignoring unidle, on console")
         else:
             log.error("Unkown command: " + data)
             resp = "error"

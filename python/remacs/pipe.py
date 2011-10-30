@@ -43,7 +43,15 @@ class Pipe(object):
 
     def setPipes(self, ifd, ofd):
         self.ifd = ifd
+        if self.ifd:
+            self.ifd_fileno = self.ifd.fileno()
+        else:
+            self.ifd_fileno = -1
         self.ofd = ofd
+        if self.ofd:
+            self.ofd_fileno = self.ofd.fileno()
+        else:
+            self.ofd_fileno = -1
 
     def sendCmd(self, cmd, data):
         self.buff.encodeCmd(cmd, data)
@@ -59,31 +67,36 @@ class Pipe(object):
         if do_read:
             data = None
             try:
-                log.debug("starting read(%d)" % self.ifd.fileno())
-                data = self.ifd.read(1024)
+                log.debug("starting read(%d)" % self.ifd_fileno)
+                if hasattr(self.ifd, "read"):
+                    data = self.ifd.read(1024)
+                else:
+                    data = self.ifd.recv(1024)
                 if data and len(data):
                     if self.buff.data:
                         self.buff.data = self.buff.data + data
                     else:
                         self.buff.data = data
                 if data:
-                    log.debug("read(%d): %s %s" % (self.ifd.fileno(), len(data),
+                    log.debug("read(%d): %s %s" % (self.ifd_fileno, len(data),
                                                    data))
                 else:
-                    log.debug("read(%d): %s" % (self.ifd.fileno(), data))
+                    log.debug("read(%d): %s" % (self.ifd_fileno, data))
             except IOError, e:
                 log.debug("read(%d): EXC: %s : %d" %
-                          (self.ifd.fileno(), str(e), e.errno))
+                          (self.ifd_fileno, str(e), e.errno))
                 if e.errno == 11:
                     log.debug("read(%d): EXC: %s" %
-                              (self.ifd.fileno(), "temp unavail"))
+                              (self.ifd_fileno, "temp unavail"))
                     return False
+                elif e.errno == 9:
+                    raise PipeConnLost("Connection lost")
                 else:
                     raise
             except OSError, e:
-                log.debug("read(%d): EXC: %s" % (self.ifd.fileno(), str(e)))
+                log.debug("read(%d): EXC: %s" % (self.ifd_fileno, str(e)))
                 if e.errno == errno.EIO:
-                    log.debug("read(%d): EXC: %s" % (self.ifd.fileno(), "EIO"))
+                    log.debug("read(%d): EXC: %s" % (self.ifd_fileno, "EIO"))
                     self.delList(self.ifd, self.ins)
                     return False
                 elif e.errno == errno.EAGAIN:
@@ -92,17 +105,17 @@ class Pipe(object):
                         return False
                 else:
                     log.debug("read(%d): EXC: %s:%d" %
-                        (self.ifd.fileno(), e.errno))
+                        (self.ifd_fileno, e.errno))
                     raise
             except SSLError, e:
                 if e.args[0] == m2.ssl_error_want_read:
-                    log.debug("ssl_read(%d): want_read" % self.ifd.fileno())
+                    log.debug("ssl_read(%d): want_read" % self.ifd_fileno)
                     self.insList(self.ifd, self.ins)
                 elif e.args[0] == m2.ssl_error_want_write:
-                    log.debug("ssl_read(%d): want_write" % self.ifd.fileno())
+                    log.debug("ssl_read(%d): want_write" % self.ifd_fileno)
                     self.insList(self.ofd, self.outs)
                 elif e.args[0] != m2.ssl_error_none:
-                    log.debug("ssl_read(%d): want_none" % self.ifd.fileno())
+                    log.debug("ssl_read(%d): want_none" % self.ifd_fileno)
                     raise PipeConnLost("Connection lost")
                 return False
             if (not data or not len(data)):
@@ -111,14 +124,26 @@ class Pipe(object):
             self.buff.filterData()
         if self.ofd and self.buff.output:
             try:
-                log.debug("write(%d) %s" % (self.ofd.fileno(), self.buff.output))
-                size = self.ofd.write(self.buff.output)
+                log.debug("write(%d) %s" % (self.ofd_fileno, self.buff.output))
+                if hasattr(self.ofd, "write"):
+                    size = self.ofd.write(self.buff.output)
+                else:
+                    size = self.ofd.send(self.buff.output)
                 # For python File objects
                 if size is None:
                     size = len(self.buff.output)
-                log.debug("write(%d) size %s" % (self.ofd.fileno(), str(size)))
+                log.debug("write(%d) size %s" % (self.ofd_fileno, str(size)))
+            except IOError, e:
+                log.debug("read(%d): EXC: %s : %d" %
+                          (self.ifd_fileno, str(e), e.errno))
+                if e.errno == 11:
+                    log.debug("read(%d): EXC: %s" %
+                              (self.ifd_fileno, "temp unavail"))
+                    return False
+                else:
+                    raise
             except OSError, e:
-                log.debug("write(%d): EXC %s" % (self.ofd.fileno(), str(e)))
+                log.debug("write(%d): EXC %s" % (self.ofd_fileno, str(e)))
                 if e.errno == errno.EAGAIN:
                     log.debug("write(%s): EXC %s" % (str(self.ofd), "EAGAIN"))
                     self.insList(self.ofd, self.outs)
@@ -126,15 +151,15 @@ class Pipe(object):
                     return False
             except SSLError, e:
                 if e.args[0] == m2.ssl_error_want_read:
-                    log.debug("ssl_write(%d): want_read" % self.ofd.fileno())
+                    log.debug("ssl_write(%d): want_read" % self.ofd_fileno)
                     self.insList(self.ifd, self.ins)
                 elif e.args[0] == m2.ssl_error_want_write:
-                    log.debug("ssl_write(%d): want_write" % self.ofd.fileno())
+                    log.debug("ssl_write(%d): want_write" % self.ofd_fileno)
                     self.insList(self.ofd, self.outs)
                 elif e.args[0] != m2.ssl_error_none:
                     raise PipeConnLost("Connection lost")
                 else:
-                    log.debug("ssl_write(%d): want_none" % self.ofd.fileno())
+                    log.debug("ssl_write(%d): want_none" % self.ofd_fileno)
                     self.insList(self.ifd, self.ins)
                     self.delList(self.ofd, self.outs)                    
                 return False
@@ -163,6 +188,8 @@ class Pipe(object):
     # Non-exception throwing list managment functions. Sometimes python takes
     # exceptions too far.
     def insList(self, val, list):
+        if val is None:
+            return
         for index in range(len(list)):
             if list[index] == val:
                 return
