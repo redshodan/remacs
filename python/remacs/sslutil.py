@@ -28,12 +28,14 @@ from M2Crypto.SSL import SSLError, Connection
 from remacs import log
 
 
+LOG = "SSL connection:"
+
+
 class SSLUtil(object):
-    LOG = "SSL connection:"
 
     def __init__(self, isserver, cacert, cert):
         self.loadContext(isserver, cacert, cert)
-        self.loadAllCerts(cacert)
+        self.cacerts = loadAllCerts(cacert)
 
     def makeSock(self):
         self.sock = Connection(self.ctx)
@@ -51,15 +53,15 @@ class SSLUtil(object):
     
     def postConnectionCheck(self, peer_cert, peer_addr):
         log.info("%s checking: %s, %s",
-                 self.LOG, peer_addr, peer_cert.get_subject())
+                 LOG, peer_addr, peer_cert.get_subject())
         # Must have a cert
         if peer_cert is None:
-            raise Exception("%s Peer did not return certificate" % self.LOG)
+            raise Exception("%s Peer did not return certificate" % LOG)
         # Check openssl's verification
         ret = self.sock.get_verify_result()
         if ret != m2.X509_V_OK:
             msg = ("% Peers certificate did not verify: %s - %s" %
-                   (self.LOG, Err.get_error(), Err.get_error_reason(ret)))
+                   (LOG, Err.get_error(), Err.get_error_reason(ret)))
             log.warn(msg)
             raise Exception(msg)
         # Compare the peers cacert to our cacerts, just to make sure
@@ -71,7 +73,7 @@ class SSLUtil(object):
                 for peer in stack:
                     if ((cakey == peer.get_pubkey().get_rsa().pub()) and
                         (der == peer.as_der())):
-                        log.info("%s peer signed by: %s", self.LOG,
+                        log.info("%s peer signed by: %s", LOG,
                                  ca.get_subject())
                         return True
         else:
@@ -85,30 +87,8 @@ class SSLUtil(object):
                          (ret, ca.get_subject()))
                 if ret == 1:
                     return True
-        raise Exception("%s No trusted CA Cert found" % self.LOG)
+        raise Exception("%s No trusted CA Cert found" % LOG)
     
-    # Borrowed from M2Crypto.X509 and modified
-    def loadAllCerts(self, file, format=X509.FORMAT_PEM):
-        self.cacerts = []
-        bio = BIO.openfile(file)
-        try:
-            while True:
-                if format == X509.FORMAT_PEM:
-                    self.cacerts.append(X509.load_cert_bio(bio))
-                elif format == X509.FORMAT_DER:
-                    cptr = m2.d2i_x509(bio._ptr())
-                    if cptr is None:
-                        raise X509.X509Error(Err.get_error())
-                    self.cacerts.append(X509.X509(cptr, _pyfree=1))
-                else:
-                    raise ValueError(
-                      "Unknown format. Must be either FORMAT_DER or FORMAT_PEM")
-        except X509.X509Error, e:
-            if not len(self.cacerts):
-                raise
-        if not len(self.cacerts):
-            raise Exception("No cacert was found")
-
     # Re-cribbed from M2Crypto's SSL/cb.py
     # Cribbed from OpenSSL's apps/s_cb.c.
     def sslInfoCallback(self, where, ret, ssl_ptr):
@@ -125,10 +105,10 @@ class SSLUtil(object):
         if (where & m2.SSL_CB_EXIT):
             if not ret:
                 log.warn("%s FAILED: %s: %s" %
-                         (self.LOG, state, m2.ssl_get_state_v(ssl_ptr)))
+                         (LOG, state, m2.ssl_get_state_v(ssl_ptr)))
             else:
                 log.verb("%s %s: %s" %
-                         (self.LOG, state, m2.ssl_get_state_v(ssl_ptr)))
+                         (LOG, state, m2.ssl_get_state_v(ssl_ptr)))
         elif (where & m2.SSL_CB_ALERT):
             if (where & m2.SSL_CB_READ):
                 w = 'read'
@@ -136,8 +116,38 @@ class SSLUtil(object):
                 w = 'write'
             desc = m2.ssl_get_alert_desc_v(ret)
             msg = ("%s ALERT: %s: %s: %s" %
-                   (self.LOG, w, m2.ssl_get_alert_type_v(ret), desc))
+                   (LOG, w, m2.ssl_get_alert_type_v(ret), desc))
             if desc == "close notify":
                 log.verb(msg)
             else:
                 log.warn(msg)
+
+# Borrowed from M2Crypto.X509 and modified
+def loadAllCerts(file, format=X509.FORMAT_PEM):
+    cacerts = []
+    bio = BIO.openfile(file)
+    try:
+        while True:
+            if format == X509.FORMAT_PEM:
+                cacerts.append(X509.load_cert_bio(bio))
+            elif format == X509.FORMAT_DER:
+                cptr = m2.d2i_x509(bio._ptr())
+                if cptr is None:
+                    raise X509.X509Error(Err.get_error())
+                cacerts.append(X509.X509(cptr, _pyfree=1))
+            else:
+                raise ValueError(
+                    "Unknown format. Must be either FORMAT_DER or FORMAT_PEM")
+    except X509.X509Error, e:
+        if not len(cacerts):
+            raise
+    if not len(cacerts):
+        raise Exception("No cacert was found")
+    return cacerts
+
+def loadCertStack(file, format=X509.FORMAT_PEM):
+    cacerts = loadAllCerts(file, format)
+    stack = X509.X509_Stack()
+    for cacert in cacerts:
+        stack.push(cacert)
+    return stack
