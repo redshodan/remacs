@@ -67,7 +67,7 @@
 +                 cert_error,
 +                 X509_STORE_CTX_get_error_depth(csc),
 +                 X509_verify_cert_error_string(cert_error));
-+        errbuff[VERIFY_BUFF_SIZE] = 0;
++        errbuff[VERIFY_BUFF_SIZE - 1] = 0;
 +        PyErr_SetString(_x509_err, errbuff);
 +    }
 +
