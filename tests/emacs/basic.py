@@ -20,30 +20,33 @@
 # $Revision$
 #
 
+import os, socket
 
-import os, sys
-if os.path.islink(__file__):
-    path = os.path.dirname(os.readlink(__file__))
-else:
-    path = os.path.dirname(__file__)
-sys.path = [os.path.abspath(os.path.join(path, "../python"))] + sys.path
-del path
-
-import unittest2
-from test import test_support
-import utils
-
-### Add test modules/packages here
-import basic, protocol, emacs
-test_modules = [basic, protocol, emacs]
+import remacs
+from remacs import log
+from utils import RemacsTestCase, startEmacs, stopEmacs
 
 
-utils.init()
+class EmacsProtocolTests(RemacsTestCase):
+    @classmethod
+    def setUpClass(cls):
+        RemacsTestCase.setUpClass()
+        startEmacs()
 
-print "Running tests..."
-print "----------------------------------------------------------------------"
-print
-ts = unittest2.TestSuite()
-for module in test_modules:
-    ts.addTests(unittest2.defaultTestLoader.loadTestsFromModule(module))
-test_support.run_unittest(ts)
+    @classmethod
+    def tearDownClass(cls):
+        stopEmacs()
+        RemacsTestCase.tearDownClass()
+
+    def setUp(self):
+        RemacsTestCase.setUp(self)
+        self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.sock.connect("/tmp/remacs%d/remacs-test" % os.geteuid())
+        log.info("connected to emacs server")
+
+    def tearDown(self):
+        self.sock.close()
+        RemacsTestCase.tearDown(self)
+
+    def test_Connect(self):
+        log.verb("test_Connect")

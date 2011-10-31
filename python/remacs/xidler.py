@@ -21,7 +21,7 @@
 #
 
 
-import os, time, fcntl, subprocess, commands
+import os, time, fcntl, subprocess, commands, atexit
 from subprocess import Popen
 import gobject, gtk, glib
 
@@ -49,6 +49,10 @@ class XIdler(object):
             self.xsaver = Popen([ret[1], "-watch"], stdout=subprocess.PIPE)
             fcntl.fcntl(self.xsaver.stdout, fcntl.F_SETFL, os.O_NONBLOCK)
             glib.io_add_watch(self.xsaver.stdout, glib.IO_IN, self.onXSaver)
+            atexit.register(self.onexit)
+
+    def onexit(self):
+        self.xsaver.kill()
 
     def onXSaver(self, fd, state):
         try:

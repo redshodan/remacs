@@ -21,29 +21,4 @@
 #
 
 
-import os, sys
-if os.path.islink(__file__):
-    path = os.path.dirname(os.readlink(__file__))
-else:
-    path = os.path.dirname(__file__)
-sys.path = [os.path.abspath(os.path.join(path, "../python"))] + sys.path
-del path
-
-import unittest2
-from test import test_support
-import utils
-
-### Add test modules/packages here
-import basic, protocol, emacs
-test_modules = [basic, protocol, emacs]
-
-
-utils.init()
-
-print "Running tests..."
-print "----------------------------------------------------------------------"
-print
-ts = unittest2.TestSuite()
-for module in test_modules:
-    ts.addTests(unittest2.defaultTestLoader.loadTestsFromModule(module))
-test_support.run_unittest(ts)
+from .basic import *

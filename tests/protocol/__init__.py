@@ -76,6 +76,8 @@ class BaseProtocolTestCase(RemacsTestCase):
     def tearDown(self):
         self.tty1.mgr.quit()
         self.tty2.mgr.quit()
+        self.tty1.join()
+        self.tty2.join()
         if self.excpt:
             raise self.excpt
         RemacsTestCase.tearDown(self)

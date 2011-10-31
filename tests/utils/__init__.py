@@ -20,7 +20,9 @@
 # $Revision$
 #
 
-import os, sys, unittest
+import os, sys, unittest2, time
+from subprocess import Popen
+
 import remacs
 from remacs import log
 
@@ -28,18 +30,18 @@ from remacs import log
 ##
 ## unittest behavior adjustment
 ##
-class RemacsTestCase(unittest.TestCase):
+class RemacsTestCase(unittest2.TestCase):
     def __init__(self, name):
-        unittest.TestCase.__init__(self, name)
+        unittest2.TestCase.__init__(self, name)
         self.orgtest = getattr(self, name)
         setattr(self, name, self._run)
 
     def setUp(self):
-        unittest.TestCase.setUp(self)
+        unittest2.TestCase.setUp(self)
         log.info("=========Starting test: %s=========", str(self))
 
     def tearDown(self):
-        unittest.TestCase.tearDown(self)
+        unittest2.TestCase.tearDown(self)
         log.info("=========Ending test: %s=========", str(self))
 
     def _run(self):
@@ -64,6 +66,24 @@ class DefaultOpts(object):
         self.no_x = True
         self.id = "test1"
 
+
+def startEmacs():
+    log.info("Starting emacs")
+    emacs_log = open("emacs.log", "w+")
+    cmd = ["emacs", "--daemon", "-nw", "-q", "--eval",
+           '(progn (setq server-name "remacs-emacs")'
+           '(setq remacs-server-name "remacs-test")'
+           '(add-to-list \'load-path "../../elisp")'
+           '(find-file-noselect "../../elisp/remacs.el" t)'
+           '(eval-buffer (get-buffer "remacs.el"))(remacs-test))']
+    Popen(cmd, stdout=emacs_log, stderr=emacs_log)
+    time.sleep(2)
+
+def stopEmacs():
+    log.info("Stopping emacs")
+    cmd = ("emacsclient -s /tmp/emacs%d/remacs-emacs --eval "
+           "\"(progn (setq kill-emacs-hook 'nil) (kill-emacs))\"") % os.getuid()
+    os.system(cmd)
 
 def init():
     log.init("test")
