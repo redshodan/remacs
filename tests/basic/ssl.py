@@ -34,27 +34,34 @@ CACERT1 = "../../tests/certs/cacert1.pem"
 CACERT2 = "../../tests/certs/cacert2.pem"
 CACERTBOTH = "../../tests/certs/cacert-both.pem"
 
+
 class SSLUtilTests(RemacsTestCase):
     def test_verifyCert(self):
         cacerts = sslutil.loadCertStack(CACERT1)
         client1 = X509.load_cert(CLIENT1)
-        self.assertEqual(m2.verify_cert(cacerts.stack, client1.x509), 1,
+        self.assertTrue(m2.verify_cert(cacerts.stack, client1.x509),
                          "verified incorrectly")
+
+    def test_verifyCAIdentity(self):
+        cacerts = sslutil.loadCertStack(CACERT1)
+        client1 = X509.load_cert(CACERT1)
+        self.assertTrue(m2.verify_cert(cacerts.stack, client1.x509), 
+                        "verified incorrectly")
 
     def test_verifyCertWrongCA(self):
         cacerts = sslutil.loadCertStack(CACERT2)
         client1 = X509.load_cert(CLIENT1)
-        self.assertEqual(m2.verify_cert(cacerts.stack, client1.x509), 0,
-                         "verified incorrectly")
+        self.assertRaises(X509.X509Error,
+                          m2.verify_cert, cacerts.stack, client1.x509)
         
     def test_verifyCertBothCAs1(self):
         cacerts = sslutil.loadCertStack(CACERTBOTH)
         client1 = X509.load_cert(CLIENT1)
-        self.assertEqual(m2.verify_cert(cacerts.stack, client1.x509), 1,
-                         "verified incorrectly")
+        self.assertTrue(m2.verify_cert(cacerts.stack, client1.x509),
+                        "verified incorrectly")
         
     def test_verifyCertBothCAs2(self):
         cacerts = sslutil.loadCertStack(CACERTBOTH)
         client1 = X509.load_cert(CLIENT2)
-        self.assertEqual(m2.verify_cert(cacerts.stack, client1.x509), 1,
-                         "verified incorrectly")
+        self.assertTrue(m2.verify_cert(cacerts.stack, client1.x509),
+                        "verified incorrectly")

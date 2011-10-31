@@ -36,7 +36,7 @@ third_party: $(BDIRS)
 	make -C third_party
 
 tests: $(BDIRS) clean-run python $(TOBJS)
-	(cd build/runs; python ../tests/run.pyc)
+	(cd build/runs; python ../tests/run.pyc $(ARGS))
 
 clean-run:
 	rm -rf build/runs/*

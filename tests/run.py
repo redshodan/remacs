@@ -21,6 +21,12 @@
 #
 
 
+###
+### Add test modules/packages here
+###
+test_names = ["basic", "emacs", "protocol"]
+
+
 import os, sys
 if os.path.islink(__file__):
     path = os.path.dirname(os.readlink(__file__))
@@ -29,16 +35,18 @@ else:
 sys.path = [os.path.abspath(os.path.join(path, "../python"))] + sys.path
 del path
 
-import unittest2
+import unittest2, modulefinder
 from test import test_support
 import utils
 
-### Add test modules/packages here
-import basic, protocol, emacs
-test_modules = [basic, protocol, emacs]
-
-
 utils.init()
+
+test_modules = []
+if len(sys.argv) > 1:
+    test_names = sys.argv[1:]
+for name in test_names:
+    __import__(name)
+    test_modules.append(sys.modules[name])
 
 print "Running tests..."
 print "----------------------------------------------------------------------"
