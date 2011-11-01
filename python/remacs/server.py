@@ -93,7 +93,7 @@ class Server(ProtocolBase):
             self.setupInOut()
             # self.setupSock()
             # self.setupTTY()
-            self.setMgr(TTYManager(self.fdin, self.fdout, self.tty, self.cmd_cb))
+            self.setMgr(TTYManager(self.fdin, self.fdout, self.tty, self.cmdCB))
             self.mgr.run()
         except Exception, e:
             log.exception("Main loop exception", e)
@@ -145,11 +145,9 @@ class Server(ProtocolBase):
         else:
             raise Exception("Lost connection to emacs")
         
-    def cmd_cb(self, cmd, data):
+    def cmdCB(self, cmd, data):
         log.verb("SERVER CMD: %s DATA: %s" % (cmd, data))
-        if cmd == PipeBuff.CMD_TTY:
-            return data
-        elif cmd == PipeBuff.CMD_CMD:
+        if cmd == PipeBuff.CMD_CMD:
             d = dom.parseString(data)
             elem = d.firstChild
             if elem.nodeName in ["query"]:

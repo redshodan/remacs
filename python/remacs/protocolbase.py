@@ -36,7 +36,8 @@ class ProtocolBase(object):
 
     def sendCmd(self, data):
         if not isinstance(data, types.StringTypes):
-            data = toxml(data).encode("utf-8")
+            data = toxml(data)
+        data = data.encode("utf-8")
         log.verb("Sending cmd: %s" % data)
         self.mgr.sendCmd(PipeBuff.CMD_CMD, data)
     

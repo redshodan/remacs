@@ -159,13 +159,14 @@ class PipeBuff(object):
             ret = True
         if cmd != self.CMD_ACK:
             self.inacker.inPacket()
-        if (cmd_data and (cmd != self.CMD_TTY)):
-            cmd_data = self.cb(cmd, cmd_data)
         if cmd_data:
-            if self.output:
-                self.output = self.output + cmd_data
+            if cmd == self.CMD_TTY:
+                if self.output:
+                    self.output = self.output + cmd_data
+                else:
+                    self.output = cmd_data
             else:
-                self.output = cmd_data
+                self.cb(cmd, cmd_data)
         if log.getLevel() == log.DEBUG:
             log.debug("decoded length: %d self.cmd: %d cmd: %d" %
                       (self.length, self.cmd, cmd))

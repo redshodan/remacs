@@ -57,7 +57,7 @@ release:
 	cd android; ant release
 
 clean-android:
-	cd android; ant clean
+	@(cd android; ant clean)
 
 install: install-device
 

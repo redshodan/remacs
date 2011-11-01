@@ -40,7 +40,7 @@ class Client(ProtocolBase):
         self.first_setup = True
         self.resuming = False
         self.emacs_suspended = False
-        self.cmd = (self.options.transport + " -T " + self.options.host +
+        self.cmd = (self.options.transport + " " + self.options.host +
                     " remacs --server")
         log.info("cmd: " + self.cmd)
         if "TERM" in os.environ:
@@ -147,8 +147,6 @@ class Client(ProtocolBase):
             else:
                 log.error("Unkown command: " + data)
             d.unlink()
-        else:
-            return None
 
     def handleQuery(self, cmd, data, elem):
         if elem.getAttribute("type") == "error":
@@ -185,7 +183,6 @@ class Client(ProtocolBase):
         else:
             log.error("Unkown command: " + data)
             resp = "error"
-            
         
     def invokeNotif(self, id):
         log.info("Sending notification invoked: %s" % id)

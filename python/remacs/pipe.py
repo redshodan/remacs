@@ -43,11 +43,13 @@ class Pipe(object):
 
     def setPipes(self, ifd, ofd):
         self.ifd = ifd
+        self.ifd_read = hasattr(self.ifd, "read")
         if self.ifd:
             self.ifd_fileno = self.ifd.fileno()
         else:
             self.ifd_fileno = -1
         self.ofd = ofd
+        self.ofd_write = hasattr(self.ofd, "write")
         if self.ofd:
             self.ofd_fileno = self.ofd.fileno()
         else:
@@ -68,7 +70,7 @@ class Pipe(object):
             data = None
             try:
                 log.debug("starting read(%d)" % self.ifd_fileno)
-                if hasattr(self.ifd, "read"):
+                if self.ifd_read:
                     data = self.ifd.read(1024)
                 else:
                     data = self.ifd.recv(1024)
@@ -125,7 +127,7 @@ class Pipe(object):
         if self.ofd and self.buff.output:
             try:
                 log.debug("write(%d) %s" % (self.ofd_fileno, self.buff.output))
-                if hasattr(self.ofd, "write"):
+                if self.ofd_write:
                     size = self.ofd.write(self.buff.output)
                 else:
                     size = self.ofd.send(self.buff.output)

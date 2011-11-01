@@ -64,7 +64,7 @@ if __name__ == "__main__":
                       help="Cert for ssl mode")
     parser.add_option("-C", "--cacert", dest="cacert", default=None,
                       help="CA cert for ssl mode")
-    parser.add_option("-t", "--transport", dest="transport", default="ssh",
+    parser.add_option("-t", "--transport", dest="transport", default="ssh -T",
                       help="Transport program. ie: ssh")
     parser.add_option("-X", "--no-x", action="store_true", dest="no_x",
                       default=False, help="Disable X support")
