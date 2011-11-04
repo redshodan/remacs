@@ -24,7 +24,8 @@
 import remacs
 from remacs import log
 from remacs.pipebuff import PipeBuff
-from . import BaseProtocolTestCase, callback
+from remacs.acker import DEFAULT_WINDOW
+from . import BaseProtocolTestCase, callback, callbackN, royal_we
 
 
 class BasicProtocolTests(BaseProtocolTestCase):
@@ -33,8 +34,36 @@ class BasicProtocolTests(BaseProtocolTestCase):
         def cb(cmd, data):
             self.assertEquals(PipeBuff.CMD_CMD, cmd)
             self.assertEquals(self.cmd, data)
-        self.init(cb)
+        self.init(cb, cb)
         self.cmd = "<query/>"
         self.resetDone()
         self.tty2.mgr.sendCmd(PipeBuff.CMD_CMD, self.cmd)
         self.waitDone()
+
+    def test_basicAcking(self):
+        self.cmd = "<query id='%d'/>"
+        self.count1 = 0
+        self.count2 = 0
+        @callbackN
+        def cb1(cmd, data):
+            royal_we.count1 = royal_we.count1 + 1
+            self.assertEquals(PipeBuff.CMD_CMD, cmd)
+            self.assertEquals(self.cmd % royal_we.count1, data)
+        @callback
+        def cb2(cmd, data, buff):
+            royal_we.count2 = royal_we.count2 + 1
+            self.assertEquals(PipeBuff.CMD_ACK, cmd)
+            self.assertEquals(None, data)
+            expected = DEFAULT_WINDOW * (royal_we.i + 1)
+            self.assertEquals(expected, buff.outacker.ack_cur)
+            self.assertEquals(expected, buff.outacker.pkt_count)
+            self.assertEquals(0, len(buff.outacker.buffer))
+            self.assertEquals(royal_we.count1, 5 * (royal_we.i + 1))
+            self.assertEquals(royal_we.count2, 1 + royal_we.i)
+        self.init(cb1, None, None, cb2)
+        for self.i in range(DEFAULT_WINDOW):
+            self.resetDone()
+            for j in range(DEFAULT_WINDOW):
+                count = self.i * DEFAULT_WINDOW + j + 1
+                self.tty2.mgr.sendCmd(PipeBuff.CMD_CMD, self.cmd % count)
+            self.waitDone()

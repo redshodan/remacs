@@ -25,10 +25,13 @@ from remacs import log
 from remacs.pipebuff import PipeBuff
 
 
+DEFAULT_WINDOW = 5
+
+
 class InAcker(object):
     def __init__(self):
         self.outpipe = None
-        self.ack_window = 5
+        self.ack_window = DEFAULT_WINDOW
         self.ack_cur = 0
         self.pkt_count = 0
 
@@ -43,7 +46,7 @@ class InAcker(object):
 
 class OutAcker(object):
     def __init__(self,):
-        self.ack_window = 5
+        self.ack_window = DEFAULT_WINDOW
         self.ack_cur = 0
         self.pkt_count = 0
         self.buffer = []

@@ -50,6 +50,7 @@ class TTYManager(object):
         self.setup()
 
     def close(self):
+        log.debug("Closing TTYManager")
         try:
             self.fdin.close()
         except:
@@ -80,7 +81,9 @@ class TTYManager(object):
             self.fdout.setblocking(0)
         fcntl.fcntl(self.fdout, fcntl.F_SETFL, os.O_NONBLOCK)
 
-        self.ins.extend([self.fdin])
+        self.wake_pipe = os.pipe()
+
+        self.ins.extend([self.wake_pipe[0], self.fdin])
         self.inpipe.setPipes(self.fdin, self.tty)
         self.outpipe.setPipes(self.tty, self.fdout)
 
@@ -145,6 +148,8 @@ class TTYManager(object):
                         self.outpipe.run(True)
                     if self.fdout in ret[1]:
                         self.outpipe.run(False)
+                    if self.wake_pipe[0] in ret[0]:
+                        self.handleWake()
                 except PipeConnLost, e:
                     log.info("Connection lost")
                     self.close()
@@ -161,7 +166,24 @@ class TTYManager(object):
             traceback.print_exc()
             raise
 
+    def poke(self):
+        try:
+            os.write(self.wake_pipe[1], "A")
+        except Exception, e:
+            log.exception(e, "Failed on wake pipe")
+            self.close()
+
+    def handleWake(self):
+        log.debug("handleWake")
+        try:
+            os.read(self.wake_pipe[0], 1)
+            self.outpipe.run(False)
+        except Exception, e:
+            log.exception(e, "Failed on wake pipe")
+            self.close()
+
     def quit(self):
+        log.debug("Quitting TTYManager")
         self.running = False
         self.close()
 
@@ -185,6 +207,7 @@ class TTYManager(object):
 
     def sendCmd(self, cmd, data):
         self.outpipe.sendCmd(cmd, data)
+        self.poke()
 
     def getAcked(self):
         return self.inacker.ack_cur

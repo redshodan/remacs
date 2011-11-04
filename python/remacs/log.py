@@ -52,8 +52,11 @@ def crit(*args, **kwargs):
 def exception(*args, **kwargs):
     if isinstance(args[0], Exception):
         e = args[0]
-        args = list(args[1:])
-        args[0] = args[0] + "\n" + str(e)
+        if len(args) > 1:
+            args = list(args[1:])
+            args[0] = args[0] + "\n" + str(e)
+        else:
+            args = [str(e)]
     logger.exception(*args, **kwargs)
 
 def setLevel(level):

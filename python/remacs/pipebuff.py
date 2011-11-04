@@ -44,6 +44,7 @@ class PipeBuff(object):
 
     def __init__(self, cb, decoder, encoder, inacker, outacker):
         self.cb = cb
+        self.all_cb = None
         self.decoder = decoder
         self.encoder = encoder
         self.data = None
@@ -159,6 +160,8 @@ class PipeBuff(object):
             ret = True
         if cmd != self.CMD_ACK:
             self.inacker.inPacket()
+        if self.all_cb:
+            self.all_cb(cmd, cmd_data, self)
         if cmd_data:
             if cmd == self.CMD_TTY:
                 if self.output:

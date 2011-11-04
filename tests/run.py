@@ -35,23 +35,36 @@ else:
 sys.path = [os.path.abspath(os.path.join(path, "../python"))] + sys.path
 del path
 
-import unittest2, modulefinder
+import unittest2, types
 from test import test_support
 import utils
 
 utils.init()
 
-test_modules = []
 if len(sys.argv) > 1:
     test_names = sys.argv[1:]
+
+ts = unittest2.TestSuite()
 for name in test_names:
-    __import__(name)
-    test_modules.append(sys.modules[name])
+    func = None
+    try:
+        __import__(name)
+    except ImportError:
+        words = name.split(".")
+        func = words[-1]
+        name = ".".join(words[:-1])
+        __import__(name)
+    if func:
+        mod = sys.modules[name]
+        for key, val in mod.__dict__.iteritems():
+            if hasattr(val, "test_basicAcking"):
+                tc = val(func)
+                ts.addTests([tc])
+    else:
+        ts.addTests(
+            unittest2.defaultTestLoader.loadTestsFromModule(sys.modules[name]))
 
 print "Running tests..."
 print "----------------------------------------------------------------------"
 print
-ts = unittest2.TestSuite()
-for module in test_modules:
-    ts.addTests(unittest2.defaultTestLoader.loadTestsFromModule(module))
 test_support.run_unittest(ts)

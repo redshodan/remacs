@@ -20,23 +20,24 @@
 # $Revision$
 #
 
-import os, threading, socket
+import os, threading, socket, time
 
 import remacs
 from remacs import log, ttymanager
 from remacs.pipebuff import PipeBuff
-from utils import RemacsTestCase, DefaultOpts
+from utils import RemacsTestCase, DefaultOpts, ModuleRef
 
 
 SOCKET = "/tmp/remacs.test.sock"
-royal_we = None
+royal_we = ModuleRef(None)
 
 
 class TTYMgrRunner(threading.Thread):
-    def __init__(self, isserver, cb, tc):
+    def __init__(self, isserver, cb, all_cb, tc):
         threading.Thread.__init__(self)
         self.isserver = isserver
         self.cb = cb
+        self.all_cb = all_cb
         self.tc = tc
     
     def run(self):
@@ -51,44 +52,49 @@ class TTYMgrRunner(threading.Thread):
             self.tc.poke()
             self.sock, addr = sock.accept()
             self.mgr = ttymanager.TTYManager(self.sock, self.sock, None, self.cb)
+            self.mgr.inpipe.buff.all_cb = self.all_cb
         else:
             self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
             self.sock.connect(SOCKET)
             self.mgr = ttymanager.TTYManager(self.sock, self.sock, None, self.cb)
+            self.mgr.inpipe.buff.all_cb = self.all_cb
             self.tc.poke()
         log.debug("tty isserver=%s: %s" %
                   (str(self.isserver), str(id(self.mgr))))
-        self.mgr.run()
+        try:
+            self.mgr.run()
+        except Exception, e:
+            log.exception(e)
+            royal_we.excpt.append(e)
 
 
 class BaseProtocolTestCase(RemacsTestCase):
     def __init__(self, *args, **kwargs):
         RemacsTestCase.__init__(self, *args, **kwargs)
-        self.excpt = None
+        self.excpt = []
         self.cond = threading.Condition()
         self.done = False
 
     def setUp(self):
         RemacsTestCase.setUp(self)
-        global royal_we
-        royal_we = self
+        royal_we.__setobj__(self)
 
     def tearDown(self):
         self.tty1.mgr.quit()
         self.tty2.mgr.quit()
         self.tty1.join()
         self.tty2.join()
-        if self.excpt:
-            raise self.excpt
+        if len(self.excpt):
+            raise Exception(str(self.excpt))
         RemacsTestCase.tearDown(self)
     
-    def init(self, cb):
+    def init(self, cb1, cb2, all1=None, all2=None):
         self.resetDone()
-        self.tty1 = TTYMgrRunner(True, cb, self)
+        self.tty1 = TTYMgrRunner(True, cb1, all1, self)
         self.tty1.start()
         self.waitDone()
         self.resetDone()
-        self.tty2 = TTYMgrRunner(False, cb, self)
+        self.tty2 = TTYMgrRunner(False, cb2, all2, self)
         self.tty2.start()
         self.waitDone()
 
@@ -103,10 +109,14 @@ class BaseProtocolTestCase(RemacsTestCase):
         self.cond.notify()
         self.cond.release()
     
-    def waitDone(self):
+    def waitDone(self, timeout=5):
         self.cond.acquire()
+        end = time.time() + 5
         while not self.done:
-            self.cond.wait()
+            self.cond.wait(timeout)
+            if end < time.time():
+                raise Exception("waitDone timedout: "  + str(self.excpt))
+                break
         self.cond.release()
 
 
@@ -115,9 +125,19 @@ def callback(func):
         try:
             func(*args, **kwargs)
         except Exception, e:
-            royal_we.excpt = e
+            log.exception(e)
+            royal_we.excpt.append(e)
         finally:
             royal_we.poke()
+    return newfunc
+
+def callbackN(func):
+    def newfunc(*args, **kwargs):
+        try:
+            func(*args, **kwargs)
+        except Exception, e:
+            log.exception(e)
+            royal_we.excpt.append(e)
     return newfunc
 
 

@@ -20,7 +20,7 @@
 # $Revision$
 #
 
-import os, errno
+import os, errno, threading
 
 from M2Crypto import m2
 from M2Crypto.SSL import SSLError
@@ -40,6 +40,7 @@ class Pipe(object):
         self.outs = outs
         self.buff = PipeBuff(cb, decoder, encoder, inacker, outacker)
         self.reader = None
+        self.lock = threading.Lock()
 
     def setPipes(self, ifd, ofd):
         self.ifd = ifd
@@ -56,13 +57,21 @@ class Pipe(object):
             self.ofd_fileno = -1
 
     def sendCmd(self, cmd, data):
-        self.buff.encodeCmd(cmd, data)
-        self.insList(self.ofd, self.outs)
-        self.delList(self.ifd, self.ins)
+        self.lock.acquire()
+        try:
+            self.buff.encodeCmd(cmd, data)
+            self.insList(self.ofd, self.outs)
+            self.delList(self.ifd, self.ins)
+        finally:
+            self.lock.release()
 
     def run(self, do_read):
-        while self._run(do_read):
-            pass
+        self.lock.acquire()
+        try:
+            while self._run(do_read):
+                pass
+        finally:
+            self.lock.release()
         
     def _run(self, do_read):
         log.debug("Pipe.run(%s)" % str(do_read))
@@ -90,6 +99,7 @@ class Pipe(object):
                 if e.errno == 11:
                     log.debug("read(%d): EXC: %s" %
                               (self.ifd_fileno, "temp unavail"))
+                    self.insList(self.ifd, self.ins)
                     return False
                 elif e.errno == 9:
                     raise PipeConnLost("Connection lost")
@@ -134,13 +144,15 @@ class Pipe(object):
                 # For python File objects
                 if size is None:
                     size = len(self.buff.output)
-                log.debug("write(%d) size %s" % (self.ofd_fileno, str(size)))
+                log.debug("write(%d) size %s wanted %s" %
+                          (self.ofd_fileno, str(size), len(self.buff.output)))
             except IOError, e:
                 log.debug("read(%d): EXC: %s : %d" %
                           (self.ifd_fileno, str(e), e.errno))
                 if e.errno == 11:
                     log.debug("read(%d): EXC: %s" %
                               (self.ifd_fileno, "temp unavail"))
+                    self.insList(self.ofd, self.outs)
                     return False
                 else:
                     raise
@@ -149,7 +161,7 @@ class Pipe(object):
                 if e.errno == errno.EAGAIN:
                     log.debug("write(%s): EXC %s" % (str(self.ofd), "EAGAIN"))
                     self.insList(self.ofd, self.outs)
-                    self.delList(self.ifd, self.ins)
+                    # self.delList(self.ifd, self.ins)
                     return False
             except SSLError, e:
                 if e.args[0] == m2.ssl_error_want_read:
