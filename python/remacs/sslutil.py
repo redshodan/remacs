@@ -64,7 +64,9 @@ class SSLUtil(object):
                    (LOG, Err.get_error(), Err.get_error_reason(ret)))
             log.warn(msg)
             raise Exception(msg)
-        # Compare the peers cacert to our cacerts, just to make sure
+        # Compare the peers cacert to our cacerts, just to make sure. This is
+        # trusting that the ssl stack has enforced that this cert chain is being
+        # used correctly by the other side.
         stack = self.sock.get_peer_cert_chain()
         if stack:
             for ca in self.cacerts:
@@ -82,7 +84,8 @@ class SSLUtil(object):
             for ca in self.cacerts:
                 tstack = X509.X509_Stack()
                 tstack.push(ca)
-                ret = m2.verify_cert(tstack.stack, peer_cert.x509)
+                ret = m2.verify_cert(tstack.stack, peer_cert.x509,
+                                     X509.CRL().crl, 0)
                 log.verb("Verify result %d, against %s" %
                          (ret, ca.get_subject()))
                 if ret == 1:
