@@ -42,3 +42,19 @@
          check = getattr(self, 'postConnectionCheck', self.serverPostConnectionCheck)
          if check is not None:
              if not check(ssl.get_peer_cert(), ssl.addr[0]):
+--- M2Crypto/SSL/Connection.py.old	2011-11-05 17:24:20.879690004 -0600
++++ M2Crypto/SSL/Connection.py	2011-11-05 12:43:39.919689999 -0600
+@@ -172,7 +171,12 @@
+             raise
+         check = getattr(self, 'postConnectionCheck', self.serverPostConnectionCheck)
+         if check is not None:
+-            if not check(ssl.get_peer_cert(), ssl.addr[0]):
++            import types
++            if type(ssl.addr) in (types.ListType, types.TupleType):
++                addr = ssl.addr[0]
++            else:
++                addr = ssl.addr
++            if not check(ssl.get_peer_cert(), addr):
+                 raise Checker.SSLVerificationError, 'post connection check failed'
+         return ssl, addr
+ 

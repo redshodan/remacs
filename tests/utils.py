@@ -27,6 +27,29 @@ import remacs
 from remacs import log
 
 
+## Cert paths
+CLIENT1 = "../../tests/certs/client1.pem"
+EXPIRED_CLIENT1 = "../../tests/certs/expired1.pem"
+REVOKED_CLIENT1 = "../../tests/certs/revoked1.pem"
+SERVER1 = "../../tests/certs/server1.pem"
+EXPIRED_SERVER1 = "../../tests/certs/expiredserver1.pem"
+REVOKED_SERVER1 = "../../tests/certs/revokedserver1.pem"
+CACERT1 = "../../tests/certs/cacert1.pem"
+CRL1 = ["../../tests/certs/crl1.pem"]
+
+CLIENT2 = "../../tests/certs/client2.pem"
+EXPIRED_CLIENT2 = "../../tests/certs/expired2.pem"
+REVOKED_CLIENT2 = "../../tests/certs/revoked2.pem"
+SERVER2 = "../../tests/certs/server2.pem"
+EXPIRED_SERVER2 = "../../tests/certs/expiredserver2.pem"
+REVOKED_SERVER2 = "../../tests/certs/revokedserver2.pem"
+CACERT2 = "../../tests/certs/cacert2.pem"
+CRL2 = ["../../tests/certs/crl2.pem"]
+
+CACERTBOTH = "../../tests/certs/cacert-both.pem"
+CRLBOTH = ["../../tests/certs/crl1.pem", "../../tests/certs/crl2.pem"]
+
+
 ##
 ## unittest behavior adjustment
 ##
@@ -62,6 +85,7 @@ class DefaultOpts(object):
         self.sslport = "4748"
         self.cert = None
         self.cacert = None
+        self.crl = None
         self.transport = "ssh"
         self.no_x = True
         self.id = "test1"

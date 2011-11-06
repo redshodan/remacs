@@ -33,21 +33,33 @@ LOG = "SSL connection:"
 
 class SSLUtil(object):
 
-    def __init__(self, isserver, cacert, cert):
-        self.loadContext(isserver, cacert, cert)
+    def __init__(self, isserver, cacert, cert, crls=None):
+        self.isserver = isserver
+        self.crls = []
+        if crls:
+            for crl in crls:
+                self.crls.append(X509.load_crl(crl))
+            self.use_crl = 1
+        else:
+            self.crls.append(X509.CRL())
+            self.use_crl = 0
+        self.loadContext(cacert, cert)
         self.cacerts = loadAllCerts(cacert)
 
-    def makeSock(self):
-        self.sock = Connection(self.ctx)
+    def makeSock(self, sock=None):
+        self.sock = Connection(self.ctx, sock=sock)
         self.sock.postConnectionCheck = self.postConnectionCheck
 
-    def loadContext(self, isserver, cacert, cert):
+    def loadContext(self, cacert, cert):
         self.ctx = SSL.Context("tlsv1")
         self.ctx.set_verify(SSL.verify_peer | SSL.verify_fail_if_no_peer_cert,
                             10)
         self.ctx.set_allow_unknown_ca(False)
         self.ctx.set_cipher_list('ALL:!ADH:!LOW:!EXP:!MD5:@STRENGTH')
         self.ctx.load_verify_locations(cafile=cacert, capath=None)
+        if self.isserver:
+            # Advertise the CAs we'll accept in server mode
+            self.ctx.set_client_CA_list_from_file(cacert)
         self.ctx.load_cert_chain(cert)
         self.ctx.set_info_callback(sslInfoCallback)
     
@@ -56,41 +68,38 @@ class SSLUtil(object):
                  LOG, peer_addr, peer_cert.get_subject())
         # Must have a cert
         if peer_cert is None:
-            raise Exception("%s Peer did not return certificate" % LOG)
+            raise X509.X509Error("%s Peer did not return certificate" % LOG)
         # Check openssl's verification
         ret = self.sock.get_verify_result()
         if ret != m2.X509_V_OK:
             msg = ("% Peers certificate did not verify: %s - %s" %
                    (LOG, Err.get_error(), Err.get_error_reason(ret)))
             log.warn(msg)
-            raise Exception(msg)
-        # Compare the peers cacert to our cacerts, just to make sure. This is
-        # trusting that the ssl stack has enforced that this cert chain is being
-        # used correctly by the other side.
-        stack = self.sock.get_peer_cert_chain()
-        if stack:
-            for ca in self.cacerts:
-                cakey = ca.get_pubkey().get_rsa().pub()
-                der = ca.as_der()
-                for peer in stack:
-                    if ((cakey == peer.get_pubkey().get_rsa().pub()) and
-                        (der == peer.as_der())):
-                        log.info("%s peer signed by: %s", LOG,
-                                 ca.get_subject())
-                        return True
-        else:
-            # This is sslserver case where there was no cacert given. Find a
-            # cacert in our trusted list that matches this client cert
-            for ca in self.cacerts:
-                tstack = X509.X509_Stack()
-                tstack.push(ca)
+            raise X509.X509Error(msg)
+        # Verify the peers cert against our explicit cacerts and perform a CRL
+        # check, just to make sure. The intent is to only trust our configured
+        # certs, never anything signed by a 'real' CA since we are not doing
+        # any kind of DNS assertions. This is trusting that the ssl stack has
+        # enforced that the peers cert chain is being used correctly.
+        tstack = X509.X509_Stack()
+        for ca in self.cacerts:
+            tstack.push(ca)
+        # FIXME: implement STACK_OF(X509_CRL) class so don't have to loop this.
+        ret = False
+        for crl in self.crls:
+            log.verb("usel_crl %d %d %s" % (self.isserver, self.use_crl, crl))
+            try:
                 ret = m2.verify_cert(tstack.stack, peer_cert.x509,
-                                     X509.CRL().crl, 0)
-                log.verb("Verify result %d, against %s" %
-                         (ret, ca.get_subject()))
-                if ret == 1:
-                    return True
-        raise Exception("%s No trusted CA Cert found" % LOG)
+                                     crl.crl, self.use_crl)
+            except X509.X509Error, e:
+                # Don't stop looking if this CRL did not match the peers cert
+                if e.args[1] != m2.X509_V_ERR_UNABLE_TO_GET_CRL:
+                    raise
+            log.verb("Verify result %s, %s against %s" %
+                     (ret, peer_cert.get_subject(), ca.get_subject()))
+        if ret:
+            return True
+        raise X509.X509Error("%s No trusted CA Cert found" % LOG)
 
 
 # Re-cribbed from M2Crypto's SSL/cb.py
@@ -146,7 +155,7 @@ def loadAllCerts(file, format=X509.FORMAT_PEM):
         if not len(cacerts):
             raise
     if not len(cacerts):
-        raise Exception("No cacert was found")
+        raise X509.X509Error("No cacert was found")
     return cacerts
 
 def loadCertStack(file, format=X509.FORMAT_PEM):

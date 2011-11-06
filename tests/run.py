@@ -35,11 +35,24 @@ else:
 sys.path = [os.path.abspath(os.path.join(path, "../python"))] + sys.path
 del path
 
-import unittest2, types
+import unittest2, types, re
 from test import test_support
 import utils
 
 utils.init()
+
+for help in ["-h", "--help"]:
+    if help in sys.argv:
+        print "usage: run.py <pattern>"
+        print
+        print "pattern - pkg1.pkg2.partial_func"
+        print "          pkg1.pkg2/regex"
+        print
+        print "eg: basic.ssl"
+        print "    basic.ssl.Both"
+        print "    basic.ssl/.*Both.*"
+        print "    basic/.*Both.*"
+        sys.exit(0)
 
 if len(sys.argv) > 1:
     test_names = sys.argv[1:]
@@ -50,16 +63,30 @@ for name in test_names:
     try:
         __import__(name)
     except ImportError:
-        words = name.split(".")
-        func = words[-1]
-        name = ".".join(words[:-1])
+        words = name.split("/")
+        if len(words) == 2:
+            match = True
+            func = words[1]
+            name = words[0]
+        else:
+            match = False
+            words = name.split(".")
+            func = words[-1]
+            name = ".".join(words[:-1])
         __import__(name)
     if func:
         mod = sys.modules[name]
         for key, val in mod.__dict__.iteritems():
-            if hasattr(val, "test_basicAcking"):
-                tc = val(func)
-                ts.addTests([tc])
+            if type(val) == types.TypeType:
+                for key2, val2 in val.__dict__.iteritems():
+                    if key2[0] != "_":
+                        if match:
+                            ret = re.match(func, key2)
+                        else:
+                            ret = re.search(func, key2)
+                        if type(val2) == types.FunctionType and ret:
+                            tc = val(key2)
+                            ts.addTests([tc])
     else:
         ts.addTests(
             unittest2.defaultTestLoader.loadTestsFromModule(sys.modules[name]))

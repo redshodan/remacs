@@ -22,25 +22,9 @@
 
 from M2Crypto import X509, EVP, RSA, Rand, ASN1, m2, util, BIO
 
-
 import remacs
 from remacs import sslutil
-from utils import RemacsTestCase
-
-
-CLIENT1 = "../../tests/certs/client1.pem"
-EXPIRED_CLIENT1 = "../../tests/certs/expired1.pem"
-REVOKED_CLIENT1 = "../../tests/certs/revoked1.pem"
-CACERT1 = "../../tests/certs/cacert1.pem"
-CRL1 = "../../tests/certs/crl1.pem"
-
-CLIENT2 = "../../tests/certs/client2.pem"
-EXPIRED_CLIENT2 = "../../tests/certs/expired2.pem"
-REVOKED_CLIENT2 = "../../tests/certs/revoked2.pem"
-CACERT2 = "../../tests/certs/cacert2.pem"
-CRL2 = "../../tests/certs/crl2.pem"
-
-CACERTBOTH = "../../tests/certs/cacert-both.pem"
+from utils import *
 
 
 class SSLUtilTests(RemacsTestCase):
@@ -81,14 +65,14 @@ class SSLUtilTests(RemacsTestCase):
     def test_verifyCertWithCRL(self):
         cacerts = sslutil.loadCertStack(CACERT1)
         client1 = X509.load_cert(CLIENT1)
-        crl = X509.load_crl(CRL1)
+        crl = X509.load_crl(CRL1[0])
         self.assertTrue(m2.verify_cert(cacerts.stack, client1.x509, crl.crl, 1),
                         "verified incorrectly")
     
     def test_verifyRevokedCertWithCRL(self):
         cacerts = sslutil.loadCertStack(CACERT1)
         client1 = X509.load_cert(REVOKED_CLIENT1)
-        crl = X509.load_crl(CRL1)
+        crl = X509.load_crl(CRL1[0])
         self.assertRaises(X509.X509Error, m2.verify_cert, cacerts.stack,
                           client1.x509, crl.crl, 1)
 

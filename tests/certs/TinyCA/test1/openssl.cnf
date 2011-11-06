@@ -148,5 +148,3 @@ subjectKeyIdentifier = hash
 authorityKeyIdentifier = keyid,issuer:always
 issuerAltName = issuer:copy
 subjectAltName = email:copy
-extendedKeyUsage = critical, $ENV::EXTENDEDKEYUSAGE
-

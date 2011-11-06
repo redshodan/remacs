@@ -3,3 +3,6 @@ V	210928175056Z		02	unknown	/C=US/CN=server1
 V	210928175455Z		03	unknown	/C=US/CN=serverclient
 R	121104152943Z	111105190009Z	04	unknown	/C=US/CN=expired1
 R	211102153109Z	111105153124Z,keyCompromise	05	unknown	/C=US/CN=revoked1
+V	111106190054Z		06	unknown	/C=US/CN=expired1
+V	111107173229Z		07	unknown	/C=US/CN=expiredserver1
+V	211103173238Z		08	unknown	/C=US/CN=revokedserver1

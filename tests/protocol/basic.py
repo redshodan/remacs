@@ -26,9 +26,19 @@ from remacs import log
 from remacs.pipebuff import PipeBuff
 from remacs.acker import DEFAULT_WINDOW
 from . import BaseProtocolTestCase, callback, callbackN, royal_we
+from utils import *
 
 
 class BasicProtocolTests(BaseProtocolTestCase):
+    def setUp(self):
+        BaseProtocolTestCase.setUp(self)
+        self.c_opts.cert = CLIENT1
+        self.c_opts.cacert = CACERT1
+        self.c_opts.crl = None
+        self.s_opts.cert = SERVER1
+        self.s_opts.cacert = CACERT1
+        self.s_opts.crl = None
+        
     def test_basicClient(self):
         @callback
         def cb(cmd, data):
