@@ -66,12 +66,22 @@ if __name__ == "__main__":
                       help="CA cert for ssl mode")
     parser.add_option("-t", "--transport", dest="transport", default="ssh -T",
                       help="Transport program. ie: ssh")
+    parser.add_option("-T", "--term", dest="term", default=None,
+                      help="Terminal type to use")
     parser.add_option("-X", "--no-x", action="store_true", dest="no_x",
                       default=False, help="Disable X support")
+    parser.add_option("-V", "--no-vte", action="store_true", dest="no_vte",
+                      default=False, help="Disable TTY window (VTE) support")
     parser.add_option("-i", "--id", dest="id",
                       default=str(int(random.random()*100)),
                       help="Set the id for this client")
     (options, args) = parser.parse_args()
+
+    if not options.term:
+        if "TERM" in os.environ:
+            options.term = os.environ["TERM"]
+        else:
+            options.term = "xterm"
 
     if (options.ssl and (not options.cert or not options.cacert)):
         print "SSL mode requires both cert (-c) and cacert (-C) to be set."

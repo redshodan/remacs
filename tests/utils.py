@@ -20,8 +20,7 @@
 # $Revision$
 #
 
-import os, sys, unittest2, time
-from subprocess import Popen
+import os, sys, unittest2
 
 import remacs
 from remacs import log
@@ -105,23 +104,6 @@ class ModuleRef(object):
     def __setattr__(self, name, val):
         self.__obj__.__setattr__(name, val)
 
-def startEmacs():
-    log.info("Starting emacs")
-    emacs_log = open("emacs.log", "w+")
-    cmd = ["emacs", "--daemon", "-nw", "-q", "--eval",
-           '(progn (setq server-name "remacs-emacs")'
-           '(setq remacs-server-name "remacs-test")'
-           '(add-to-list \'load-path "../../elisp")'
-           '(find-file-noselect "../../elisp/remacs.el" t)'
-           '(eval-buffer (get-buffer "remacs.el"))(remacs-test))']
-    Popen(cmd, stdout=emacs_log, stderr=emacs_log)
-    time.sleep(2)
-
-def stopEmacs():
-    log.info("Stopping emacs")
-    cmd = ("emacsclient -s /tmp/emacs%d/remacs-emacs --eval "
-           "\"(progn (setq kill-emacs-hook 'nil) (kill-emacs))\"") % os.getuid()
-    os.system(cmd)
 
 def init():
     log.init("test")

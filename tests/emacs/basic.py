@@ -20,33 +20,12 @@
 # $Revision$
 #
 
-import os, socket
 
 import remacs
 from remacs import log
-from utils import RemacsTestCase, startEmacs, stopEmacs
+from . import EmacsBaseTestCase
 
 
-class EmacsProtocolTests(RemacsTestCase):
-    @classmethod
-    def setUpClass(cls):
-        RemacsTestCase.setUpClass()
-        startEmacs()
-
-    @classmethod
-    def tearDownClass(cls):
-        stopEmacs()
-        RemacsTestCase.tearDownClass()
-
-    def setUp(self):
-        RemacsTestCase.setUp(self)
-        self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        self.sock.connect("/tmp/remacs%d/remacs-test" % os.geteuid())
-        log.info("connected to emacs server")
-
-    def tearDown(self):
-        self.sock.close()
-        RemacsTestCase.tearDown(self)
-
-    def test_Connect(self):
+class EmacsProtocolTests(EmacsBaseTestCase):
+    def test_connect(self):
         log.verb("test_Connect")

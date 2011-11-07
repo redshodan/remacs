@@ -136,7 +136,7 @@ class BaseProtocolTestCase(RemacsTestCase):
     
     def waitDone(self, timeout=5):
         self.cond.acquire()
-        end = time.time() + 5
+        end = time.time() + timeout
         while not self.done:
             self.cond.wait(timeout)
             if end < time.time():

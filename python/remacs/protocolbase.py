@@ -55,4 +55,3 @@ class ProtocolBase(object):
             query.setAttribute("to", frm)
         query.setAttribute("from", self.options.id)
         self.mgr.sendCmd(PipeBuff.CMD_CMD, toxml(query).encode("utf-8"))
-

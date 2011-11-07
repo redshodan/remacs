@@ -26,12 +26,18 @@ import gtk, glib
 
 import remacs
 from remacs import log, xidler
+from remacs.protocolclient import ClientListener
 
 
-class SysTray(threading.Thread):
+class SysTray(threading.Thread, ClientListener):
     def __init__(self, client):
         threading.Thread.__init__(self)
+        ClientListener.__init__(self)
         self.client = client
+        self.ttywin = None
+
+    def start(self):
+        threading.Thread.start(self)
 
     def stop(self):
         def doquit():
@@ -75,10 +81,14 @@ class SysTray(threading.Thread):
             self.menu.popup(None, None, None, self.menu_ev_btn,
                             self.menu_ev_time, None)
         else:
-            if self.ttywin.isIconified():
-                self.raiseWindow()
+            if self.ttywin:
+                if self.ttywin.isIconified():
+                    self.raiseWindow()
+                else:
+                    self.ttywin.iconify()
             else:
-                self.ttywin.iconify()
+                self.menu.popup(None, None, None, self.menu_ev_btn,
+                                self.menu_ev_time, None)
         self.checkPending()
 
     def onMiddleClick(self, widget, event):
@@ -90,7 +100,7 @@ class SysTray(threading.Thread):
                 pending = child
                 break
         if pending:
-            if self.ttywin.isIconified():
+            if self.ttywin and self.ttywin.isIconified():
                 self.raiseWindow()
             if child.remacs_id:
                 if event.get_state() & gtk.gdk.SHIFT_MASK:
@@ -115,26 +125,26 @@ class SysTray(threading.Thread):
         widget.set_sensitive(False)
         if widget.remacs_id:
             self.client.invokeNotif(widget.remacs_id)
-            if self.ttywin.isIconified():
+            if self.ttywin and self.ttywin.isIconified():
                 self.raiseWindow()
         self.checkPending()
 
     def raiseWindow(self):
-        self.ttywin.unmap()
-        self.ttywin.map()
-        self.ttywin.present()
-        self.client.resumeEmacs()
-
-    def iconify(self):
-        self.ttywin.iconify()
+        if self.ttywin:
+            self.ttywin.unmap()
+            self.ttywin.map()
+            self.ttywin.present()
+            self.client.resumeEmacs()
         
     def checkPending(self):
         if self.msgPending():
             self.icon.set_blinking(True)
-            self.ttywin.set_urgency_hint(True)
+            if self.ttywin:
+                self.ttywin.set_urgency_hint(True)
         else:
             self.icon.set_blinking(False)
-            self.ttywin.set_urgency_hint(False)
+            if self.ttywin:
+                self.ttywin.set_urgency_hint(False)
     
     def msgPending(self):
         for child in self.menu.get_children():
@@ -144,20 +154,42 @@ class SysTray(threading.Thread):
                 return True
         return False
 
-    def error(self, msg):
-        self.message(None, "ERROR: " + msg)
-
-    def notify(self, id, msg):
-        self.message(id, msg)
-
     def message(self, id, msg):
-        self.ttywin.set_urgency_hint(True)
+        if self.ttywin:
+            self.ttywin.set_urgency_hint(True)
         item = gtk.MenuItem(msg)
         item.remacs_id = id
         self.menu.prepend(item)
         item.connect("activate", self.onMenuMsg)
         item.show()
         self.icon.set_blinking(True)
+        
+    def showErrorDialog(self, msg):
+        dialog = gtk.MessageDialog(buttons=gtk.BUTTONS_OK)
+        dialog.set_markup(msg)
+        dialog.run()
+        dialog.destroy()
+
+    ###
+    ### ClientListener impl
+    ###
+
+    def setupTTY(self):
+        try:
+            import ttywindow
+            self.ttywin = ttywindow.TTYWindow(self)
+            fd = os.fdopen(self.ttywin.pair[1], "r+", 0)
+            log.info("Setup VTE, tty: %s" % fd)
+            return fd
+        except Exception, e:
+            log.exception(e, "Failed to start VTE")
+        return None
+
+    def error(self, msg):
+        self.message(None, "ERROR: " + msg)
+
+    def notify(self, id, msg):
+        self.message(id, msg)
 
     def clearNotify(self, id):
         widget = None
@@ -168,14 +200,10 @@ class SysTray(threading.Thread):
         if widget:
             widget.set_sensitive(False)
         self.checkPending()
-        
-    def showErrorDialog(self, msg):
-        dialog = gtk.MessageDialog(buttons=gtk.BUTTONS_OK)
-        dialog.set_markup(msg)
-        dialog.run()
-        dialog.destroy()
 
-    def startVTE(self):
-        import ttywindow
-        self.ttywin = ttywindow.TTYWindow(self)
-        return self.ttywin.pair[1]
+    def suspend(self):
+        if self.ttywin:
+            self.ttywin.iconify()
+
+    def unidle(self):
+        self.xidler.unidle()
