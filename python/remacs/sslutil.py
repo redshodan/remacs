@@ -85,20 +85,37 @@ class SSLUtil(object):
         for ca in self.cacerts:
             tstack.push(ca)
         # FIXME: implement STACK_OF(X509_CRL) class so don't have to loop this.
-        ret = False
+        # m2.verify_cert should only return true if all checks pass, otherwise it
+        # should throw an exception. The return check to make sure that the C
+        # function is doing the right thing.
+        verified = False
+        unmatched = 0
         for crl in self.crls:
             try:
-                ret = m2.verify_cert(tstack.stack, peer_cert.x509,
-                                     crl.crl, self.use_crl)
+                if not m2.verify_cert(tstack.stack, peer_cert.x509,
+                                      crl.crl, self.use_crl):
+                    raise X509.X509Error("Internal error with verify_cert")
+                verified = True
+                log.verb("Verified %s against %s" %
+                         (peer_cert.get_subject(), ca.get_subject()))
             except X509.X509Error, e:
                 # Don't stop looking if this CRL did not match the peers cert
-                if e.args[1] != m2.X509_V_ERR_UNABLE_TO_GET_CRL:
+                if e.args[1] == m2.X509_V_ERR_UNABLE_TO_GET_CRL:
+                    unmatched = unmatched + 1
+                    log.verb("Verify no CRL for %s against %s" %
+                             (peer_cert.get_subject(), ca.get_subject()))
+                else:
                     raise
-            log.verb("Verify result %s, %s against %s" %
-                     (ret, peer_cert.get_subject(), ca.get_subject()))
-        if ret:
+        log.verb("unmatched: %d len(crls): %d use_crl:%d", unmatched,
+                 len(self.crls), self.use_crl)
+        # Should only have one valid match and N-1 unmatched (crls)
+        if self.use_crl and unmatched != len(self.crls) - 1:
+            raise X509.X509Error(
+                "Internal error, failed to match CRLs correctly")
+        elif verified:
             return True
-        raise X509.X509Error("%s No trusted CA Cert found" % LOG)
+        else:
+            raise X509.X509Error("%s No trusted CA Cert found" % LOG)
 
 
 # Re-cribbed from M2Crypto's SSL/cb.py
