@@ -87,7 +87,6 @@ class SSLUtil(object):
         # FIXME: implement STACK_OF(X509_CRL) class so don't have to loop this.
         ret = False
         for crl in self.crls:
-            log.verb("usel_crl %d %d %s" % (self.isserver, self.use_crl, crl))
             try:
                 ret = m2.verify_cert(tstack.stack, peer_cert.x509,
                                      crl.crl, self.use_crl)

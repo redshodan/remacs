@@ -1,7 +1,7 @@
 V	210928175609Z		01	unknown	/C=US/CN=client2
 V	210928175636Z		02	unknown	/C=US/CN=server2
 V	211103023841Z		03	unknown	/C=US/CN=revoked2
-V	111107023921Z		04	unknown	/C=US/CN=expired2
+E	111107023921Z		04	unknown	/C=US/CN=expired2
 R	111107024035Z	111106024125Z	05	unknown	/C=US/CN=serverexpired2
-V	111107024359Z		06	unknown	/C=US/CN=expiredserver2
-V	211103024423Z		07	unknown	/C=US/CN=revokedserver2
+E	111107024359Z		06	unknown	/C=US/CN=expiredserver2
+R	211103024423Z	111106024441Z,CACompromise	07	unknown	/C=US/CN=revokedserver2
