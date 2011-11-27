@@ -70,6 +70,15 @@ class TTYManager(object):
             except:
                 pass
 
+    def resume(self, mgr, tty, acked):
+        self.inacker = old.mgr.inacker
+        mgr.inacker = None
+        self.inacker.outpipe = self.outpipe
+        self.outacker = mgr.outacker
+        mgr.outacker = None
+        self.setTTY(tty)
+        self.outacker.resume(acked)
+
     def setup(self):
         log.debug("fds: fdin=%s fdout=%s tty=%s" %
                   (self.fdin, self.fdout, self.tty))

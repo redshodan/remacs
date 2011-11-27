@@ -27,6 +27,7 @@ from M2Crypto.SSL import SSLError
 
 from remacs import log
 from remacs.server import Server
+from remacs.servermgr import ServerMgr
 from remacs import sslutil
 
 def log_accept(sock, addr):
@@ -35,8 +36,9 @@ def log_accept(sock, addr):
 from M2Crypto.SSL import _Connection
 _Connection.log_accept = log_accept
 
-class SSLServerPort(ThreadingSSLServer):
+class SSLServerMgr(ThreadingSSLServer, ServerMgr):
     def __init__(self, options):
+        ServerMgr.__init__(self)
         self.options = options
         self.util = sslutil.SSLUtil(True, options.cacert, options.cert)
         ThreadingSSLServer.__init__(self,
@@ -46,7 +48,6 @@ class SSLServerPort(ThreadingSSLServer):
         self.socket.postConnectionCheck = self.util.postConnectionCheck
         self.util.sock = self.socket
         self._shutdown = False
-        self.servers = {}
 
     def sighandler(self, signum, frame):
         log.info("Caught signal, shutting down")
@@ -66,17 +67,8 @@ class SSLServerPort(ThreadingSSLServer):
 
     def shutdown(self):
         self._shutdown = True
-        for server in self.servers.values():
-            server.quit()
+        ServerMgr.shutdown(self)
         ThreadingSSLServer.shutdown(self)
-
-    def setServer(self, name, server):
-        if name in self.servers:
-            self.servers[name].quit()
-        self.servers[name] = server
-
-    def getServer(self, name):
-        return self.servers[name]
 
     #
     # ThreadingSSLServer overrides
@@ -91,11 +83,11 @@ class SSLServerPort(ThreadingSSLServer):
 
 
 class SSLServer(Server):
-    def __init__(self, request, client_address, serverport):
-        super(SSLServer, self).__init__(serverport.options)
+    def __init__(self, request, client_address, servermgr):
+        super(SSLServer, self).__init__(servermgr.options)
         self.request = request
-        self.client_address= client_address
-        self.serverport = serverport
+        self.client_address = client_address
+        self.servermgr = servermgr
         log.info("Accepted SSL connection from: %s:%s", str(client_address[0]),
                  str(client_address[1]))
         self.run()
@@ -103,14 +95,3 @@ class SSLServer(Server):
     def setupInOut(self):
         self.fdin = self.request
         self.fdout = self.request
-
-    def reset(self):
-        super(SSLServer, self).reset()
-        self.serverport.setServer(self.name, self)
-
-    def resume(self, acked, old):
-        old = self.serverport.getServer(self.name)
-        if not old:
-            raise Exception("Resume on unknown session: " + self.name)
-        super(SSLServer, self).resume(acked, old)
-        self.serverport.setServer(self.name, self)

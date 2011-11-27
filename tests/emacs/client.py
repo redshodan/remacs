@@ -26,6 +26,6 @@ from remacs import log
 from . import EmacsBaseTestCase
 
 
-class EmacsBasicTests(EmacsBaseTestCase):
+class EmacsClientTests(EmacsBaseTestCase):
     def test_connect(self):
         log.verb("test_Connect")

@@ -26,13 +26,12 @@ import errno
 from remacs import log, dom, toxml
 from remacs.pipebuff import PipeBuff
 from remacs.ttymanager import TTYManager
-from remacs.protocolbase import ProtocolBase
+from remacs.protocolserver import ProtocolServer
 
 
-class Server(ProtocolBase):
+class Server(ProtocolServer):
     def __init__(self, options):
         super(Server, self).__init__(options)
-        self.options = options
         self.fdin = None
         self.fdout = None
         self.sock = None
@@ -40,6 +39,7 @@ class Server(ProtocolBase):
         self.name = None
         self.tty = None
         self.slave = None
+        self.servermgr = None
 
     def setupInOut(self):
         self.fdin = sys.stdin
@@ -65,11 +65,7 @@ class Server(ProtocolBase):
         self.setupTTY()
         self.mgr.setTTY(self.tty)
         
-    def resume(self, acked, old):
-        if not old:
-            log.debug("Got resume on a non-resumable stream, resetting instead")
-            self.reset()
-            return False
+    def resume(self, old, acked):
         log.debug("Resuming session %s with acked=%s", self.name, acked)
         # Take over the resources from the old server
         self.sock = old.sock
@@ -79,20 +75,12 @@ class Server(ProtocolBase):
         old.tty = None
         self.slave = old.slave
         old.slave = None
-        self.mgr.inacker = old.mgr.inacker
-        old.mgr.inacker = None
-        self.mgr.inacker.outpipe = self.mgr.outpipe
-        self.mgr.outacker = old.mgr.outacker
-        old.mgr.outacker = None
-        self.mgr.setTTY(self.tty)
-        self.mgr.outacker.resume(acked)
+        self.mgr.resume(old.mgr, tty, acked)
         return True
     
     def run(self):
         try:
             self.setupInOut()
-            # self.setupSock()
-            # self.setupTTY()
             self.setMgr(TTYManager(self.fdin, self.fdout, self.tty, self.cmdCB))
             self.mgr.run()
         except Exception, e:
@@ -105,25 +93,6 @@ class Server(ProtocolBase):
 
     def quit(self):
         self.mgr.quit()
-
-    def sendToEmacs(self, cmd):
-        buff = cmd + "\000"
-        log.verb("sendToEmacs:" + buff)
-        self.sock.send(buff)
-
-    def receivedFromEmacs(self, buff):
-        log.verb("Received from emacs: %s" % buff)
-        d = dom.parseString(buff)
-        elem = d.firstChild
-        if elem.nodeName in ["query"]:
-            if elem.firstChild.nodeName == "emacs":
-                self.emacs_pid = elem.firstChild.getAttribute("pid")
-                log.info("Emacs PID=%s" % self.emacs_pid)
-            else:
-                self.sendCmd(buff)
-        else:
-            log.error("Invalid command from emacs")
-        d.unlink()
 
     def sock_cb(self, fd):
         log.debug("sock_cb")
@@ -144,51 +113,3 @@ class Server(ProtocolBase):
                     self.receivedFromEmacs(line)
         else:
             raise Exception("Lost connection to emacs")
-        
-    def cmdCB(self, cmd, data):
-        log.verb("SERVER CMD: %s DATA: %s" % (cmd, data))
-        if cmd == PipeBuff.CMD_CMD:
-            d = dom.parseString(data)
-            elem = d.firstChild
-            if elem.nodeName in ["query"]:
-                sess_attr = None
-                if elem.firstChild.nodeName == "setup":
-                    session = elem.firstChild.getElementsByTagName("session")
-                    if session:
-                        session = session[0]
-                        name = session.getAttribute("name")
-                        acked = session.getAttribute("acked")
-                        action = session.getAttribute("action")
-                        if not self.name:
-                            self.name = name
-                            if action == "reset":
-                                self.reset()
-                                sess_attr = "reset"
-                            elif action == "resume":
-                                if self.resume(acked, None):
-                                    sess_attr = "resumed"
-                                else:
-                                    sess_attr = "reset"
-                        if not self.name or not self.sock or not sess_attr:
-                            raise Exception("Invalid setup command from client")
-                    tty = elem.firstChild.getElementsByTagName("tty")
-                    if tty:
-                        tty = tty[0]
-                        if tty.getAttribute("row"):
-                            self.row = int(tty.getAttribute("row"))
-                            self.col = int(tty.getAttribute("col"))
-                            buff = struct.pack("HHHH", self.row, self.col, 0, 0)
-                            log.verb("Setting winsize: %s %s" %
-                                     (self.row, self.col))
-                            fcntl.ioctl(self.tty, termios.TIOCSWINSZ, buff)
-                        tty.setAttribute("name", os.ttyname(self.slave))
-                # Send upward to Emacs for its info, Emacs won't respond. I love
-                # this split server logic.
-                self.sendToEmacs(toxml(elem))
-                # Now respond
-                if sess_attr:
-                    elem.setAttribute("session", sess_attr)
-                self.respondQuery(elem)
-            else:
-                log.error("Unkown command: " + data)
-            d.unlink()

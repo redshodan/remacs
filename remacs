@@ -41,7 +41,7 @@ from optparse import OptionParser
 import remacs
 from remacs import log
 from remacs.server import Server
-from remacs.sslserver import SSLServerPort
+from remacs.sslserver import SSLServerMgr
 from remacs.client import Client
 from remacs.sslclient import SSLClient
 
@@ -91,7 +91,7 @@ if __name__ == "__main__":
     if options.server:
         if options.ssl:
             log.init("sslserver")
-            server = SSLServerPort(options)
+            server = SSLServerMgr(options)
         else:
             log.init("server")
             server = Server(options)

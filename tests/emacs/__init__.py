@@ -84,3 +84,4 @@ class EmacsClientBaseTestCase(EmacsBaseTestCase):
 
 
 from .basic import *
+from .client import *
