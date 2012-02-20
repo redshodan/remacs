@@ -51,13 +51,13 @@ clean: clean-android third_party-clean
 
 ## Android client rules
 debug:
-	cd android; ant debug
+	make -C android debug
 
 release:
-	cd android; ant release
+	make -C android release
 
 clean-android:
-	@(cd android; ant clean)
+	@(make -C android clean)
 
 install: install-device
 
