@@ -17,7 +17,6 @@ TSRC=$(shell find tests -name '*.py')
 TOBJS=$(patsubst %, build/%c, $(TSRC))
 DIRS=$(shell find python tests -type d)
 BDIRS=$(patsubst %, build/%, $(DIRS)) build/runs
-PYVER=$(shell python -c "import sys; print sys.version[:3]")
 
 all: third_party python
 
@@ -28,9 +27,8 @@ $(BDIRS):
 
 python: $(BDIRS) $(OBJS) idle
 
-idle: $(BUILD)/remacs/idle.so
-$(BUILD)/remacs/idle.so: lib/idle.c
-	gcc -g -shared -fPIC -Wall -I /usr/include/python$(PYVER) lib/idle.c -lpython$(PYVER) -lX11 -lXss -o $(BUILD)/remacs/idle.so
+idle:
+	make -C lib
 
 third_party: $(BDIRS)
 	make -C third_party
