@@ -46,9 +46,9 @@ class SysTray(threading.Thread, ClientListener):
         glib.idle_add(doquit)
 
     def run(self):
-        self.icon_file = os.path.join(remacs.home, "share/emacs23.svg")
+        self.icon_file = os.path.join(remacs.home, "share/emacs23.png")
         self.icon = gtk.StatusIcon()
-        self.icon.set_from_file(self.icon_file)
+        print "ret", self.icon.set_from_file(self.icon_file)
         self.icon.connect('button_press_event', self.onBtnPress)
         self.icon.connect('activate', self.onLeftClick)
         self.icon.connect('popup-menu', self.onRightClick)
