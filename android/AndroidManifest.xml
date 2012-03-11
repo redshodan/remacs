@@ -22,6 +22,6 @@
 	<uses-permission android:name="android.permission.VIBRATE" />
 	<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
 
-    <uses-sdk android:targetSdkVersion="11" android:minSdkVersion="11" />
+    <uses-sdk android:targetSdkVersion="8" android:minSdkVersion="8" />
 
 </manifest>
